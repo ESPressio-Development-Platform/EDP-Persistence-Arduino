@@ -174,8 +174,13 @@ namespace ESPressio::Persistence::Arduino {
                 return {FileSizeStatus::NotFound, StorageSize{}};
             }
 
-            const auto Size = File.size();
+            const auto Size = static_cast<std::uint64_t>(File.size());
             File.close();
+
+            if (Size > TBindingProfile::MaximumFileSize.RawValue) {
+                return {FileSizeStatus::ProviderFailure, StorageSize{}};
+            }
+
             return {FileSizeStatus::Succeeded, StorageSize{Size}};
         }
 
@@ -201,6 +206,11 @@ namespace ESPressio::Persistence::Arduino {
             }
 
             const auto CompleteSize = static_cast<std::uint64_t>(File.size());
+
+            if (CompleteSize > TBindingProfile::MaximumFileSize.RawValue) {
+                File.close();
+                return {FileReadStatus::ProviderFailure, 0U, 0U, StorageSize{}};
+            }
 
             if (Offset.RawValue > CompleteSize) {
                 File.close();
@@ -241,6 +251,10 @@ namespace ESPressio::Persistence::Arduino {
             FilePathView Path,
             SourceBufferView Source
         ) noexcept {
+            if (Source.Size > TBindingProfile::MaximumFileSize.RawValue) {
+                return FileReplaceStatus::FileTooLarge;
+            }
+
             char NativePath[256U];
 
             if (!MakeNativePath(Path, NativePath)) {
@@ -453,6 +467,16 @@ namespace ESPressio::Persistence::Arduino {
                 return FileAppendStatus::IoFailure;
             }
 
+            const auto ExistingSize = static_cast<std::uint64_t>(File.size());
+
+            if (
+                ExistingSize > TBindingProfile::MaximumFileSize.RawValue ||
+                Source.Size > TBindingProfile::MaximumFileSize.RawValue - ExistingSize
+            ) {
+                File.close();
+                return FileAppendStatus::FileTooLarge;
+            }
+
             const auto Written = Source.Size == 0U ? 0U : File.write(
                 static_cast<const std::uint8_t*>(Source.Address),
                 Source.Size
@@ -484,6 +508,11 @@ namespace ESPressio::Persistence::Arduino {
             }
 
             const auto Size = static_cast<std::uint64_t>(File.size());
+
+            if (Size > TBindingProfile::MaximumFileSize.RawValue) {
+                File.close();
+                return FileWriteAtStatus::ProviderFailure;
+            }
 
             if (Offset.RawValue > Size || Source.Size > Size - Offset.RawValue) {
                 File.close();
