@@ -148,6 +148,10 @@ namespace ESPressio::Persistence::Arduino {
 
             const auto SizeResult = GetValueSize(Key);
             const auto CompleteSize = static_cast<std::size_t>(SizeResult.Size.RawValue);
+
+            if (CompleteSize > 512U) {
+                return {KeyValueReadStatus::ProviderFailure, 0U, 0U, StorageSize{}};
+            }
             const auto TransferSize = CompleteSize < Destination.Capacity ? CompleteSize : Destination.Capacity;
 
             if (TransferSize != 0U) {
