@@ -1,3 +1,5 @@
+#include <type_traits>
+
 #include <memory/ByteOperationsProvider.hpp>
 
 #include <ESPressio_Persistence_Arduino.hpp>
@@ -35,6 +37,26 @@ namespace {
             ContractByteOperationsProvider
         >;
 
+    /// Filesystem profile proving that an explicitly concurrent binding is selectable.
+    using ConcurrentReadFileSystemProfile =
+        ESPressio::Persistence::Arduino::FileSystemBindingProfile<
+            ESPressio::Persistence::RetentionLevel::Restart,
+            ESPressio::Persistence::TextCaseSensitivity::CaseSensitive,
+            ESPressio::Persistence::MediaRemovability::Fixed,
+            254U,
+            254U,
+            0xFFFFFFFFULL,
+            ESPressio::Persistence::InvocationConcurrency::ConcurrentReads
+        >;
+
+    /// FileStorage provider whose mounted binding explicitly guarantees concurrent reads.
+    using ConcurrentReadFileStorageProvider =
+        ESPressio::Persistence::Arduino::FileSystemStorage<
+            ContractBinding,
+            ConcurrentReadFileSystemProfile,
+            ContractByteOperationsProvider
+        >;
+
     /// Concrete KeyValueStorage provider type validated by this probe.
     using ContractKeyValueStorageProvider =
         ESPressio::Persistence::Arduino::PreferencesKeyValueStorage<
@@ -55,6 +77,27 @@ namespace {
         ContractKeyValueStorageProvider
     >;
 
+    /// Persistence Composition containing the explicitly concurrent-read filesystem provider.
+    using ConcurrentReadPersistenceComposition = Framework::Composition<
+        ESPressio::Persistence::Domain,
+        ConcurrentReadFileStorageProvider
+    >;
+
+    /// Consumer requirement equivalent to EDP-Localisation FilePackSource's concurrency gate.
+    using ConcurrentReadFileStorageNeed = Framework::Need<
+        ESPressio::Persistence::FileStorage,
+        Framework::AtLeast<
+            ESPressio::Persistence::FileInvocationConcurrency,
+            ESPressio::Persistence::InvocationConcurrency::ConcurrentReads
+        >
+    >;
+
+    /// Provider selected only if the advertised binding guarantee meets ConcurrentReads.
+    using SelectedConcurrentReadProvider =
+        typename ConcurrentReadPersistenceComposition::template ProviderSatisfying<
+            ConcurrentReadFileStorageNeed
+        >;
+
     /// Complete architecture proving the Persistence -> Memory dependency is satisfied.
     using ContractArchitecture = Framework::Architecture<
         ContractMemoryComposition,
@@ -63,6 +106,25 @@ namespace {
 
 
     static_assert(ContractArchitecture::IsValid);
+
+    static_assert(
+        std::is_same_v<
+            SelectedConcurrentReadProvider,
+            ConcurrentReadFileStorageProvider
+        >
+    );
+
+    static_assert(
+        ESPressio::Persistence::Arduino::Detail::BindingConcurrency<
+            ContractFileSystemProfile
+        >() == ESPressio::Persistence::InvocationConcurrency::CallerSerialized
+    );
+
+    static_assert(
+        ESPressio::Persistence::Arduino::Detail::BindingConcurrency<
+            ConcurrentReadFileSystemProfile
+        >() == ESPressio::Persistence::InvocationConcurrency::ConcurrentReads
+    );
 
     static_assert([]() consteval {
         ESPressio::Persistence::ValidatePersistenceProvider<
