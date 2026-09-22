@@ -29,10 +29,10 @@ namespace ESPressio::Persistence::Arduino {
                 Framework::PropertyValue<ClearAllSupport, Support::Supported>,
                 Framework::PropertyValue<KeyValueCapacityReportingSupport, Support::Unsupported>,
                 Framework::PropertyValue<KeyValueInvocationConcurrency, InvocationConcurrency::CallerSerialized>,
-                Framework::PropertyValue<KeyValueFailurePreservation, FailurePreservation::PreservesCommittedState>,
+                Framework::PropertyValue<KeyValueFailurePreservation, FailurePreservation::MayModify>,
                 Framework::PropertyValue<KeyValueInterruptionAtomicity, InterruptionAtomicity::PowerLoss>,
                 Framework::PropertyValue<ClearAllFailurePreservation, FailurePreservation::MayModify>,
-                Framework::PropertyValue<ClearAllInterruptionAtomicity, InterruptionAtomicity::PowerLoss>
+                Framework::PropertyValue<ClearAllInterruptionAtomicity, InterruptionAtomicity::None>
             >
         >
     > {
@@ -49,21 +49,45 @@ namespace ESPressio::Persistence::Arduino {
         /// Indicates whether Begin() successfully opened the namespace.
         bool IsReady_;
 
-        /// Converts a validated EDP key to the null-terminated representation required by Preferences.
-        [[nodiscard]] static bool CopyKey(
+        enum class KeyCopyStatus : std::uint8_t {
+            Succeeded = 0U,
+            TooLong = 1U,
+            NotRepresentable = 2U
+        };
+
+        /// Marker type/value used to represent one present zero-length logical blob.
+        static constexpr std::uint8_t EmptyValueMarker = 0xA5U;
+
+        /// Converts an EDP key to the documented ASCII NVS key representation.
+        [[nodiscard]] static KeyCopyStatus CopyKey(
             KeyView Key,
             char (&Buffer)[16U]
         ) noexcept {
             if (Key.Size() > 15U) {
-                return false;
+                return KeyCopyStatus::TooLong;
             }
 
             for (std::size_t Index = 0U; Index < Key.Size(); ++Index) {
+                const auto Byte = static_cast<unsigned char>(Key.Data()[Index]);
+
+                if (Byte > 0x7FU) {
+                    return KeyCopyStatus::NotRepresentable;
+                }
+
                 Buffer[Index] = Key.Data()[Index];
             }
 
             Buffer[Key.Size()] = '\0';
-            return true;
+            return KeyCopyStatus::Succeeded;
+        }
+
+        /// Reports whether a native Preferences entry encodes an empty logical value.
+        [[nodiscard]] bool IsEmptyValue(const char* Key) const noexcept {
+            return Preferences_.getType(Key) == PT_U8
+                && Preferences_.getUChar(
+                    Key,
+                    static_cast<std::uint8_t>(~EmptyValueMarker)
+                ) == EmptyValueMarker;
         }
 
     public:
@@ -113,17 +137,50 @@ namespace ESPressio::Persistence::Arduino {
 
             char NativeKey[16U];
 
-            if (!CopyKey(Key, NativeKey)) {
+            const auto KeyStatus = CopyKey(
+                Key,
+                NativeKey
+            );
+
+            if (KeyStatus == KeyCopyStatus::TooLong) {
                 return {KeyValueSizeStatus::KeyTooLong, StorageSize{}};
             }
 
-            if (!Preferences_.isKey(NativeKey)) {
+            if (KeyStatus == KeyCopyStatus::NotRepresentable) {
+                return {KeyValueSizeStatus::KeyNotRepresentable, StorageSize{}};
+            }
+
+            const auto Type = Preferences_.getType(NativeKey);
+
+            if (Type == PT_INVALID) {
                 return {KeyValueSizeStatus::NotFound, StorageSize{}};
+            }
+
+            if (Type == PT_U8) {
+                return IsEmptyValue(NativeKey)
+                    ? KeyValueSizeResult{
+                        KeyValueSizeStatus::Succeeded,
+                        StorageSize{}
+                    }
+                    : KeyValueSizeResult{
+                        KeyValueSizeStatus::ProviderFailure,
+                        StorageSize{}
+                    };
+            }
+
+            if (Type != PT_BLOB) {
+                return {KeyValueSizeStatus::ProviderFailure, StorageSize{}};
+            }
+
+            const auto Size = Preferences_.getBytesLength(NativeKey);
+
+            if (Size > 512U) {
+                return {KeyValueSizeStatus::ProviderFailure, StorageSize{}};
             }
 
             return {
                 KeyValueSizeStatus::Succeeded,
-                StorageSize{Preferences_.getBytesLength(NativeKey)}
+                StorageSize{Size}
             };
         }
 
@@ -138,20 +195,38 @@ namespace ESPressio::Persistence::Arduino {
 
             char NativeKey[16U];
 
-            if (!CopyKey(Key, NativeKey)) {
+            const auto KeyStatus = CopyKey(
+                Key,
+                NativeKey
+            );
+
+            if (KeyStatus == KeyCopyStatus::TooLong) {
                 return {KeyValueReadStatus::KeyTooLong, 0U, 0U, StorageSize{}};
             }
 
-            if (!Preferences_.isKey(NativeKey)) {
-                return {KeyValueReadStatus::NotFound, 0U, 0U, StorageSize{}};
+            if (KeyStatus == KeyCopyStatus::NotRepresentable) {
+                return {KeyValueReadStatus::KeyNotRepresentable, 0U, 0U, StorageSize{}};
             }
 
             const auto SizeResult = GetValueSize(Key);
-            const auto CompleteSize = static_cast<std::size_t>(SizeResult.Size.RawValue);
 
-            if (CompleteSize > 512U) {
+            if (SizeResult.Status == KeyValueSizeStatus::NotFound) {
+                return {KeyValueReadStatus::NotFound, 0U, 0U, StorageSize{}};
+            }
+
+            if (SizeResult.Status == KeyValueSizeStatus::KeyTooLong) {
+                return {KeyValueReadStatus::KeyTooLong, 0U, 0U, StorageSize{}};
+            }
+
+            if (SizeResult.Status == KeyValueSizeStatus::KeyNotRepresentable) {
+                return {KeyValueReadStatus::KeyNotRepresentable, 0U, 0U, StorageSize{}};
+            }
+
+            if (SizeResult.Status != KeyValueSizeStatus::Succeeded) {
                 return {KeyValueReadStatus::ProviderFailure, 0U, 0U, StorageSize{}};
             }
+
+            const auto CompleteSize = static_cast<std::size_t>(SizeResult.Size.RawValue);
             const auto TransferSize = CompleteSize < Destination.Capacity ? CompleteSize : Destination.Capacity;
 
             if (TransferSize != 0U) {
@@ -192,18 +267,30 @@ namespace ESPressio::Persistence::Arduino {
                 return KeyValueStoreStatus::NotReady;
             }
 
-            if (Key.Size() > 15U) {
-                return KeyValueStoreStatus::KeyTooLong;
-            }
-
             if (Source.Size > 512U) {
                 return KeyValueStoreStatus::ValueTooLarge;
             }
 
             char NativeKey[16U];
 
-            if (!CopyKey(Key, NativeKey)) {
+            const auto KeyStatus = CopyKey(
+                Key,
+                NativeKey
+            );
+
+            if (KeyStatus == KeyCopyStatus::TooLong) {
                 return KeyValueStoreStatus::KeyTooLong;
+            }
+
+            if (KeyStatus == KeyCopyStatus::NotRepresentable) {
+                return KeyValueStoreStatus::KeyNotRepresentable;
+            }
+
+            if (Source.Size == 0U) {
+                return Preferences_.putUChar(
+                    NativeKey,
+                    EmptyValueMarker
+                ) == 1U ? KeyValueStoreStatus::Succeeded : KeyValueStoreStatus::IoFailure;
             }
 
             return Preferences_.putBytes(
@@ -221,8 +308,17 @@ namespace ESPressio::Persistence::Arduino {
 
             char NativeKey[16U];
 
-            if (!CopyKey(Key, NativeKey)) {
+            const auto KeyStatus = CopyKey(
+                Key,
+                NativeKey
+            );
+
+            if (KeyStatus == KeyCopyStatus::TooLong) {
                 return KeyValueRemoveStatus::KeyTooLong;
+            }
+
+            if (KeyStatus == KeyCopyStatus::NotRepresentable) {
+                return KeyValueRemoveStatus::KeyNotRepresentable;
             }
 
             if (!Preferences_.isKey(NativeKey)) {
