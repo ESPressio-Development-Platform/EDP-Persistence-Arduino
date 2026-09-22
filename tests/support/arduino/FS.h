@@ -6,6 +6,7 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #define FILE_READ "r"
@@ -342,11 +343,14 @@ namespace fs {
             Available
         );
 
-        std::memcpy(
-            Destination,
-            Data.data() + Position_,
-            Transfer
-        );
+        if (Transfer != 0U) {
+            std::memcpy(
+                Destination,
+                Data.data() + Position_,
+                Transfer
+            );
+        }
+
         Position_ += Transfer;
         return Transfer;
     }
