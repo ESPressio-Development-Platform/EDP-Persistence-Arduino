@@ -91,12 +91,20 @@ namespace ESPressio::Persistence::Arduino {
                 Framework::PropertyValue<WriteFileAtFailurePreservation, FailurePreservation::MayModify>,
                 Framework::PropertyValue<WriteFileAtInterruptionAtomicity, InterruptionAtomicity::None>
             >
+        >,
+        Framework::Requires<>,
+        Framework::DependsOn<
+            Framework::Need<ESPressio::Memory::ByteOperations>
         >
     > {
     private:
 
         static_assert(
-            TByteOperationsProvider::CompositionCapabilities::template Contains<ESPressio::Memory::ByteOperations>,
+            sizeof(
+                ESPressio::Memory::Detail::ByteOperationsProviderTraits<
+                    TByteOperationsProvider
+                >
+            ) > 0U,
             "Arduino FileSystemStorage requires an EDP-Memory ByteOperations provider"
         );
 
