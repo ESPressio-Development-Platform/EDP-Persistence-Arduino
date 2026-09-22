@@ -18,18 +18,18 @@ namespace {
         8ULL
     >;
 
-    using TestFileStorage = Arduino::FileSystemStorage<
+    using TestFileStorageProvider = Arduino::FileSystemStorage<
         TestBinding,
         TestFileProfile
     >;
 
-    using TestKeyValueStorage =
+    using TestKeyValueStorageProvider =
         Arduino::PreferencesKeyValueStorage<TestBinding>;
 
 
-    void TestFileStorage() {
+    void RunFileStorageTests() {
         fs::FS FileSystem;
-        TestFileStorage Storage(FileSystem);
+        TestFileStorageProvider Storage(FileSystem);
 
         constexpr auto Path = FilePathView::Validate("file.bin");
         constexpr auto Renamed = FilePathView::Validate("renamed.bin");
@@ -110,8 +110,8 @@ namespace {
     }
 
 
-    void TestKeyValueStorage() {
-        TestKeyValueStorage Storage;
+    void RunKeyValueStorageTests() {
+        TestKeyValueStorageProvider Storage;
         assert(Storage.Begin("test"));
 
         constexpr auto Key = KeyView::Validate("payload");
@@ -171,7 +171,7 @@ namespace {
 
 
 int main() {
-    TestFileStorage();
-    TestKeyValueStorage();
+    RunFileStorageTests();
+    RunKeyValueStorageTests();
     return 0;
 }
