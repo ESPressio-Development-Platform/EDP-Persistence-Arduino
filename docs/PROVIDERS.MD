@@ -43,4 +43,6 @@ Base key/value mutation failure preservation is `MayModify`. Individual key muta
 
 ## Validation
 
-`tests/ContractCompile.cpp` invokes `ValidatePersistenceProvider<T>()` for both concrete providers. `tests/run_tests.py` compiles that contract source with C++20 against the real Arduino-ESP32 SDK, EDP-Persistence and EDP-System.
+`tests/ProviderBehaviorTests.cpp` executes adapter-owned behavior with bounded `FS.h` and `Preferences.h` test doubles. It covers file mutation/read behavior, truncation facts, advertised size limits, key representability, zero-length logical values, clear/remove semantics, and related operation statuses.
+
+`tests/ContractCompile.cpp` independently invokes `ValidatePersistenceProvider<T>()` for both concrete providers. `tests/run_tests.py` runs the host behavior tests first and then compiles the contract source with C++20 against the real Arduino-ESP32 SDK, EDP-Persistence and EDP-System.
