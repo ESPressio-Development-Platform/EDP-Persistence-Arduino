@@ -27,3 +27,13 @@ Both providers advertise `CallerSerialized`. They perform no per-operation dynam
 ## Validation
 
 Concrete SDK compilation and hardware/runtime tests belong in this repository. The abstract contract is validated independently by EDP-Persistence.
+
+## Local contract compilation
+
+From this repository root, with sibling `EDP-Persistence` and `EDP-System` checkouts present, run:
+
+```bash
+python3 tests/run_tests.py
+```
+
+The runner creates an isolated temporary project and compiles `tests/ContractCompile.cpp` against the real platform SDK and real sibling EDP contract repositories. Use `--keep-build` to retain the generated project for diagnosis.
