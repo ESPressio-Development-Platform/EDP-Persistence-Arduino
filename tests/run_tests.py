@@ -123,6 +123,7 @@ def main():
                 "sdkconfig.h",
                 "soc/reg_base.h",
                 "esp_newlib.h",
+                "rom/ets_sys.h",
             )
             for required_header in required_headers:
                 matches = list(framework_libs.rglob(required_header))
@@ -132,10 +133,10 @@ def main():
                 for header in matches:
                     if "/" in required_header:
                         suffix_parts = Path(required_header).parts
-                        root = header
+                        include_root = header
                         for _ in suffix_parts:
-                            root = root.parent
-                        includes.append(root)
+                            include_root = include_root.parent
+                        includes.append(include_root)
                     else:
                         includes.append(header.parent)
             portmacro_headers = list(framework_libs.rglob("portmacro.h"))
