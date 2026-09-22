@@ -9,12 +9,18 @@ Concrete Arduino-ESP32 providers for the EDP-Persistence contract.
 
 `TBindingTag` is intentionally part of each provider type so independently selectable logical bindings can have distinct Composition identities.
 
+## Documentation
+
+- [Concrete provider contracts](./docs/PROVIDERS.MD) — provider semantics, lifecycle, ownership, memory, failure guarantees and Composition integration.
+
 ## Dependencies
 
 - EDP-Persistence-Arduino
   - EDP-Persistence
     - EDP-System
   - Arduino-ESP32
+
+[Dependency graph](./DEPENDENCY_GRAPH.MD)
 
 ## Filesystem binding profile
 
