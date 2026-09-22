@@ -99,6 +99,15 @@ def main():
                 sdkconfig_include = sdkconfig_header.parent
                 if sdkconfig_include.is_dir():
                     includes.append(sdkconfig_include)
+            # Arduino-ESP32 3.x packages ESP-IDF as many component include
+            # trees, including target-specific directories such as soc/esp32.
+            # Add every directory named "include" recursively so the direct
+            # compiler sees the same component header roots as the SDK build.
+            includes.extend(
+                include_dir
+                for include_dir in framework_libs.rglob("include")
+                if include_dir.is_dir()
+            )
             portmacro_headers = list(framework_libs.rglob("portmacro.h"))
             if not portmacro_headers:
                 print("ERROR: portmacro.h was not found in the installed Arduino-ESP32 libraries package.", file=sys.stderr)
