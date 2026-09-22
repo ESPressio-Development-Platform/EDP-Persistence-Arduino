@@ -31,7 +31,7 @@ See [../../docs/BUILDING.MD](../../docs/BUILDING.MD) for the exact C++20/PIOArdu
 ## Demonstrated semantics
 
 - `FileSystemStorage` uses an SD card through Arduino `SD`.
-- The demo filesystem profile advertises restart retention, case-insensitive FAT paths, removable media, a 63-byte path limit, a 31-byte segment limit, and a 4096-byte maximum logical file.
+- The demo filesystem profile advertises restart retention, case-insensitive FAT paths, removable media, a 63-byte path limit, a 31-byte segment limit, a 4096-byte maximum logical file, and `ConcurrentReads`. The concurrency guarantee is an explicit binding assertion for this FAT-backed mount; arbitrary `fs::FS` bindings still default to `CallerSerialized`.
 - `PreferencesKeyValueStorage` stores, reads, replaces with a present zero-length value, queries that value, and removes the key.
 - Both providers receive the same caller-owned ByteOperations provider.
 
