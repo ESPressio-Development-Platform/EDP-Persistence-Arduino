@@ -40,7 +40,7 @@ Only select values that are true for the actual mounted substrate. A profile cla
 
 ## Lifecycle
 
-The providers do not take ownership of platform lifecycle. The application mounts its filesystem before constructing/using `FileSystemStorage`. For Preferences, call `Begin(namespace)` during Bootstrap and `End()` during teardown.
+The providers do not take ownership of platform lifecycle. The application must mount the selected filesystem before constructing/using `FileSystemStorage` and keep that mount and `fs::FS` object valid for the provider's complete use lifetime. For Preferences, call `Begin(namespace)` during Bootstrap and `End()` during teardown. The bound Preferences namespace is provider-owned for its use lifetime: other code must not insert native Preferences values into the same namespace because the provider reserves its native representation (including the marker used for a present zero-length logical value).
 
 ## Concurrency and memory
 
