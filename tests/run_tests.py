@@ -14,8 +14,22 @@ def main():
     persistence=Path(a.persistence).resolve() if a.persistence else sibling(root,"EDP-Persistence")
     system=Path(a.system).resolve() if a.system else sibling(root,"EDP-System","ESPressio-System")
     pio=a.pio or shutil.which("pio") or shutil.which("platformio")
-    if not pio or not persistence or not system:
-        print("ERROR: require PlatformIO plus sibling EDP-Persistence and EDP-System (or pass explicit paths).",file=sys.stderr); return 2
+    missing = []
+    if not pio: missing.append("PlatformIO executable ('pio' or 'platformio')")
+    if not persistence: missing.append("sibling EDP-Persistence checkout")
+    if not system: missing.append("sibling EDP-System checkout")
+    if missing:
+        print("ERROR: missing required test dependency:", file=sys.stderr)
+        for item in missing:
+            print(f"  - {item}", file=sys.stderr)
+        if not pio:
+            print("\nPlatformIO is not available on PATH. If it is installed elsewhere, run:", file=sys.stderr)
+            print("  python3 tests/run_tests.py --pio /path/to/pio", file=sys.stderr)
+        if not persistence:
+            print("\nExpected EDP-Persistence beside this repository, or pass --persistence /path/to/EDP-Persistence.", file=sys.stderr)
+        if not system:
+            print("\nExpected EDP-System beside this repository, or pass --system /path/to/EDP-System.", file=sys.stderr)
+        return 2
     build=Path(tempfile.mkdtemp(prefix="edp-persistence-arduino-tests-"))
     try:
         (build/"src").mkdir(); shutil.copy2(root/"tests"/"ContractCompile.cpp",build/"src"/"main.cpp")
