@@ -52,6 +52,10 @@ The providers do not take ownership of platform lifecycle. The application must 
 
 Both providers advertise `CallerSerialized`. They perform no per-operation dynamic allocation themselves. Preferences contains one bounded 512-byte scratch buffer because NVS cannot partially retrieve a blob; it is used only when the caller destination requires truncation.
 
+## Demos
+
+- [Concrete Providers](./demos/ConcreteProviders/README.MD) — exercises both FileStorage and KeyValueStorage concrete providers across the required Arduino IDE, PlatformIO Arduino, and PlatformIO ESP-IDF demo surfaces.
+
 ## Validation
 
 Concrete SDK compilation and hardware/runtime tests belong in this repository. The abstract contract is validated independently by EDP-Persistence.
