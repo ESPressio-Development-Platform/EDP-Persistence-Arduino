@@ -99,6 +99,14 @@ def main():
                 sdkconfig_include = sdkconfig_header.parent
                 if sdkconfig_include.is_dir():
                     includes.append(sdkconfig_include)
+            portmacro_headers = list(framework_libs.rglob("portmacro.h"))
+            if not portmacro_headers:
+                print("ERROR: portmacro.h was not found in the installed Arduino-ESP32 libraries package.", file=sys.stderr)
+                return 2
+            for portmacro_header in portmacro_headers:
+                portmacro_include = portmacro_header.parent
+                if portmacro_include.is_dir():
+                    includes.append(portmacro_include)
         command = [
             str(compiler),
             "-std=gnu++20",
