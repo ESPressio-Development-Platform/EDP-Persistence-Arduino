@@ -50,7 +50,8 @@ using StorageProfile = ESPressio::Persistence::Arduino::FileSystemBindingProfile
     ESPressio::Persistence::MediaRemovability::Fixed,
     254U,
     254U,
-    0xFFFFFFFFULL
+    0xFFFFFFFFULL,
+    ESPressio::Persistence::InvocationConcurrency::ConcurrentReads
 >;
 
 using StorageProvider =
@@ -63,6 +64,8 @@ using StorageProvider =
 
 Only select values which are true for the mounted substrate. A profile claiming `PowerLoss` means every successful mutation performed through the provider has crossed a power-loss-surviving commit boundary.
 
+The final `InvocationConcurrency` template argument is optional and defaults to `CallerSerialized`, preserving the conservative behavior of existing profiles. Set it to `ConcurrentReads` only when the mounted filesystem genuinely permits safe concurrent read-side invocations. The provider adds no lock or runtime state for this guarantee; it advertises the binding fact exactly as supplied. Existing custom binding-profile types which do not expose a concurrency field also remain conservatively `CallerSerialized`.
+
 ## Lifecycle
 
 The application must mount the selected filesystem before constructing `FileSystemStorage`. The filesystem object, mount, and ByteOperations provider must all remain valid for the provider's complete lifetime.
@@ -73,7 +76,11 @@ The bound Preferences namespace is dedicated to this provider while open because
 
 ## Concurrency and memory
 
-Both providers advertise `CallerSerialized` and perform no per-operation dynamic allocation themselves.
+`FileSystemStorage` advertises the concurrency guarantee supplied by its binding profile. Standard profiles default to `CallerSerialized`; a binding may explicitly advertise `ConcurrentReads` or `ConcurrentOperations` only when that is true for the mounted substrate. This changes no runtime RAM or locking behavior.
+
+`PreferencesKeyValueStorage` remains `CallerSerialized`.
+
+Both providers perform no per-operation dynamic allocation themselves.
 
 Preferences contains one bounded 512-byte scratch buffer because native NVS retrieval cannot partially retrieve a blob. Truncated-copy transfer from that scratch buffer uses the injected EDP-Memory ByteOperations provider.
 
