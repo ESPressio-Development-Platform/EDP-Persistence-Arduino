@@ -127,21 +127,25 @@ namespace ESPressio::Persistence::Arduino {
             KeyView Key,
             DestinationBufferView Destination
         ) const noexcept {
-            const auto SizeResult = GetValueSize(Key);
-
-            if (SizeResult.Status != KeyValueSizeStatus::Succeeded) {
-                return {
-                    static_cast<KeyValueReadStatus>(SizeResult.Status),
-                    static_cast<std::uint8_t>(ReadFact::None),
-                    0U,
-                    StorageSize{}
-                };
+            if (!IsReady_) {
+                return {KeyValueReadStatus::NotReady, 0U, 0U, StorageSize{}};
             }
 
+            char NativeKey[16U];
+
+            if (!CopyKey(Key, NativeKey)) {
+                return {KeyValueReadStatus::KeyTooLong, 0U, 0U, StorageSize{}};
+            }
+
+            if (!Preferences_.isKey(NativeKey)) {
+                return {KeyValueReadStatus::NotFound, 0U, 0U, StorageSize{}};
+            }
+
+            const auto SizeResult = GetValueSize(Key);
             const auto CompleteSize = static_cast<std::size_t>(SizeResult.Size.RawValue);
             const auto TransferSize = CompleteSize < Destination.Capacity ? CompleteSize : Destination.Capacity;
 
-            if (TransferSize != 0U && Preferences_.getBytes(Key.Data(), Destination.Address, TransferSize) != TransferSize) {
+            if (TransferSize != 0U && Preferences_.getBytes(NativeKey, Destination.Address, TransferSize) != TransferSize) {
                 return {KeyValueReadStatus::IoFailure, 0U, 0U, StorageSize{}};
             }
 
