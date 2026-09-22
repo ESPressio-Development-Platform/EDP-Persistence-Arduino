@@ -39,11 +39,14 @@ default_envs = contract
 platform = espressif32
 framework = arduino
 board = esp32dev
+lib_ldf_mode = deep+
 build_flags =
     -std=gnu++20
     -I{root/"src"}
     -I{persistence/"src"}
     -I{system/"src"}
+    -I$PROJECT_PACKAGES_DIR/framework-arduinoespressif32/libraries/FS/src
+    -I$PROJECT_PACKAGES_DIR/framework-arduinoespressif32/libraries/Preferences/src
 build_unflags =
     -std=gnu++11
     -std=gnu++14
