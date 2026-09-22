@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstring>
+
 #include <Preferences.h>
 
 #include <ESPressio_Persistence.hpp>
@@ -21,7 +23,7 @@ namespace ESPressio::Persistence::Arduino {
                 Framework::PropertyValue<KeyCaseSensitivity, TextCaseSensitivity::CaseSensitive>,
                 Framework::PropertyValue<KeyValueMediaRemovability, MediaRemovability::Fixed>,
                 Framework::PropertyValue<MaximumKeyBytes, std::size_t{15U}>,
-                Framework::PropertyValue<MaximumKeyValueSize, StorageSize{1984U}>,
+                Framework::PropertyValue<MaximumKeyValueSize, StorageSize{512U}>,
                 Framework::PropertyValue<KeyEnumerationSupport, Support::Unsupported>,
                 Framework::PropertyValue<ReadValueAtSupport, Support::Unsupported>,
                 Framework::PropertyValue<ClearAllSupport, Support::Supported>,
@@ -40,6 +42,9 @@ namespace ESPressio::Persistence::Arduino {
 
         /// Arduino Preferences object owning the open NVS handle.
         Preferences Preferences_;
+
+        /// Bounded scratch space used only when the caller requests a truncated blob read.
+        mutable std::uint8_t ReadScratch_[512U];
 
         /// Indicates whether Begin() successfully opened the namespace.
         bool IsReady_;
@@ -145,8 +150,22 @@ namespace ESPressio::Persistence::Arduino {
             const auto CompleteSize = static_cast<std::size_t>(SizeResult.Size.RawValue);
             const auto TransferSize = CompleteSize < Destination.Capacity ? CompleteSize : Destination.Capacity;
 
-            if (TransferSize != 0U && Preferences_.getBytes(NativeKey, Destination.Address, TransferSize) != TransferSize) {
-                return {KeyValueReadStatus::IoFailure, 0U, 0U, StorageSize{}};
+            if (TransferSize != 0U) {
+                if (CompleteSize <= Destination.Capacity) {
+                    if (Preferences_.getBytes(NativeKey, Destination.Address, CompleteSize) != CompleteSize) {
+                        return {KeyValueReadStatus::IoFailure, 0U, 0U, StorageSize{}};
+                    }
+                } else {
+                    if (Preferences_.getBytes(NativeKey, ReadScratch_, CompleteSize) != CompleteSize) {
+                        return {KeyValueReadStatus::IoFailure, 0U, 0U, StorageSize{}};
+                    }
+
+                    std::memcpy(
+                        Destination.Address,
+                        ReadScratch_,
+                        TransferSize
+                    );
+                }
             }
 
             std::uint8_t Facts = static_cast<std::uint8_t>(ReadFact::AvailableDataSizeIsKnown);
@@ -173,7 +192,7 @@ namespace ESPressio::Persistence::Arduino {
                 return KeyValueStoreStatus::KeyTooLong;
             }
 
-            if (Source.Size > 1984U) {
+            if (Source.Size > 512U) {
                 return KeyValueStoreStatus::ValueTooLarge;
             }
 
