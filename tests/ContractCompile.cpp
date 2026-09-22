@@ -5,14 +5,14 @@ namespace {
     struct ContractBinding final {};
 
     using ContractFileSystemProfile =
-            ESPressio::Persistence::Arduino::FileSystemBindingProfile<
-                ESPressio::Persistence::RetentionLevel::Restart,
-                ESPressio::Persistence::TextCaseSensitivity::CaseSensitive,
-                ESPressio::Persistence::MediaRemovability::Fixed,
-                254U,
-                254U,
-                0xFFFFFFFFULL
-            >;
+        ESPressio::Persistence::Arduino::FileSystemBindingProfile<
+            ESPressio::Persistence::RetentionLevel::Restart,
+            ESPressio::Persistence::TextCaseSensitivity::CaseSensitive,
+            ESPressio::Persistence::MediaRemovability::Fixed,
+            254U,
+            254U,
+            0xFFFFFFFFULL
+        >;
 
 
     static_assert([]() consteval {
