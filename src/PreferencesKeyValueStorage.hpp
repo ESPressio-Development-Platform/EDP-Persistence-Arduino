@@ -5,14 +5,28 @@
 #include <Preferences.h>
 
 #include <ESPressio_Persistence.hpp>
+#include <memory/ByteOperationsContract.hpp>
 
 namespace ESPressio::Persistence::Arduino {
 
     namespace Framework = ESPressio::System::CompositionFramework;
 
 
-    /// TBindingTag distinguishes independently selectable Preferences namespaces in Composition.
-    template<class TBindingTag>
+    /// Result of opening the Preferences namespace owned by one provider instance.
+    enum class PreferencesBeginStatus : std::uint8_t {
+        Succeeded = 0U,
+        ProviderFailure = 1U
+    };
+
+
+    /// Adapts one Arduino Preferences namespace to the EDP KeyValueStorage contract.
+    ///
+    /// @tparam TBindingTag Distinguishes independently selectable Preferences namespaces.
+    /// @tparam TByteOperationsProvider Supplies EDP-Memory raw byte-copy operations used by truncated reads.
+    template<
+        class TBindingTag,
+        class TByteOperationsProvider
+    >
     class PreferencesKeyValueStorage final : public Framework::Provider<
         Domain,
         Framework::Provides<
@@ -38,10 +52,19 @@ namespace ESPressio::Persistence::Arduino {
     > {
     private:
 
-        // Bound Preferences namespace.
+        static_assert(
+            TByteOperationsProvider::CompositionCapabilities::template Contains<ESPressio::Memory::ByteOperations>,
+            "Arduino PreferencesKeyValueStorage requires an EDP-Memory ByteOperations provider"
+        );
+
+
+        // Bound dependencies.
 
         /// Arduino Preferences object owning the open NVS handle.
         mutable Preferences Preferences_;
+
+        /// Non-owning EDP-Memory byte-operation provider used for bounded raw copies.
+        const TByteOperationsProvider* ByteOperations_;
 
         /// Bounded scratch space used only when the caller requests a truncated blob read.
         mutable std::uint8_t ReadScratch_[512U];
@@ -49,6 +72,7 @@ namespace ESPressio::Persistence::Arduino {
         /// Indicates whether Begin() successfully opened the namespace.
         bool IsReady_;
 
+        /// Result of converting an EDP key to the native Preferences key representation.
         enum class KeyCopyStatus : std::uint8_t {
             Succeeded = 0U,
             TooLong = 1U,
@@ -94,22 +118,28 @@ namespace ESPressio::Persistence::Arduino {
 
         // Lifecycle controlled by Bootstrap/application wiring.
 
-        /// Constructs an unopened Preferences provider.
-        PreferencesKeyValueStorage() noexcept
+        /// Constructs an unopened provider using one caller-owned ByteOperations provider.
+        explicit PreferencesKeyValueStorage(
+            const TByteOperationsProvider& ByteOperations
+        ) noexcept
             : Preferences_(),
+              ByteOperations_(&ByteOperations),
               IsReady_(false) {}
 
         /// Opens the caller-selected Preferences namespace.
-        [[nodiscard]] bool Begin(const char* Namespace) noexcept {
+        [[nodiscard]] PreferencesBeginStatus Begin(const char* Namespace) noexcept {
             if (IsReady_) {
-                return true;
+                return PreferencesBeginStatus::Succeeded;
             }
 
             IsReady_ = Preferences_.begin(
                 Namespace,
                 false
             );
-            return IsReady_;
+
+            return IsReady_
+                ? PreferencesBeginStatus::Succeeded
+                : PreferencesBeginStatus::ProviderFailure;
         }
 
         /// Closes the Preferences namespace.
@@ -239,7 +269,7 @@ namespace ESPressio::Persistence::Arduino {
                         return {KeyValueReadStatus::IoFailure, 0U, 0U, StorageSize{}};
                     }
 
-                    std::memcpy(
+                    ByteOperations_->CopyBytes(
                         Destination.Address,
                         ReadScratch_,
                         TransferSize
