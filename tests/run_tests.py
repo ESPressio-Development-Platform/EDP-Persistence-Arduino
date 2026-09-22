@@ -41,6 +41,9 @@ def main():
     framework = first_existing(
         home / "packages" / "framework-arduinoespressif32",
     )
+    framework_libs = first_existing(
+        home / "packages" / "framework-arduinoespressif32-libs" / "esp32",
+    )
     compiler = Path(args.compiler).expanduser().resolve() if args.compiler else first_existing(
         home / "packages" / "toolchain-xtensa-esp-elf" / "bin" / "xtensa-esp32-elf-g++",
         home / "packages" / "toolchain-xtensa-esp32" / "bin" / "xtensa-esp32-elf-g++",
@@ -50,6 +53,7 @@ def main():
     if not persistence: missing.append("sibling EDP-Persistence checkout")
     if not system: missing.append("sibling EDP-System checkout")
     if not framework: missing.append("Arduino-ESP32 framework package under ~/.platformio/packages")
+    if not framework_libs: missing.append("Arduino-ESP32 ESP-IDF libraries package under ~/.platformio/packages")
     if not compiler: missing.append("Xtensa ESP32 C++ compiler under ~/.platformio/packages")
     if missing:
         print("ERROR: missing required compile dependency:", file=sys.stderr)
@@ -70,6 +74,17 @@ def main():
             framework / "libraries" / "FS" / "src",
             framework / "libraries" / "Preferences" / "src",
         ]
+        if framework_libs:
+            includes.extend(
+                path
+                for path in (framework_libs / "include").glob("*/include")
+                if path.is_dir()
+            )
+            includes.extend(
+                path
+                for path in (framework_libs / "include").glob("*")
+                if path.is_dir()
+            )
         command = [
             str(compiler),
             "-std=gnu++20",
@@ -90,6 +105,7 @@ def main():
 
         print(f"Compiler: {compiler}")
         print(f"Arduino-ESP32: {framework}")
+        print(f"Arduino-ESP32 IDF libraries: {framework_libs}")
         print(f"EDP-Persistence-Arduino: {root}")
         print(f"EDP-Persistence: {persistence}")
         print(f"EDP-System: {system}")
