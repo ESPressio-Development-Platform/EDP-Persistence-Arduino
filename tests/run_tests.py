@@ -91,6 +91,14 @@ def main():
                 config_include = config_header.parent
                 if config_include.is_dir():
                     includes.append(config_include)
+            sdkconfig_headers = list(framework_libs.rglob("sdkconfig.h"))
+            if not sdkconfig_headers:
+                print("ERROR: sdkconfig.h was not found in the installed Arduino-ESP32 libraries package.", file=sys.stderr)
+                return 2
+            for sdkconfig_header in sdkconfig_headers:
+                sdkconfig_include = sdkconfig_header.parent
+                if sdkconfig_include.is_dir():
+                    includes.append(sdkconfig_include)
         command = [
             str(compiler),
             "-std=gnu++20",
