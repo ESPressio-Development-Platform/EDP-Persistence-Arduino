@@ -32,7 +32,8 @@ The binding profile is part of the provider type and declares the semantic guara
 - media removability;
 - maximum complete path bytes;
 - maximum path-segment bytes;
-- maximum file size.
+- maximum file size;
+- safe invocation concurrency.
 
 The adapter does not infer those guarantees from `fs::FS`. The application must choose a profile that is true for the actual mounted substrate.
 
@@ -49,7 +50,11 @@ Use a different/specialized provider for a filesystem which does not genuinely s
 
 The provider does not mount, format, unmount, or own the filesystem. The `fs::FS` object, filesystem mount, and ByteOperations provider must all outlive the provider.
 
-All FileStorage operations advertise `CallerSerialized`. File mutation failure preservation is `MayModify`, and interruption atomicity is `None`.
+`FileSystemStorage` advertises the binding profile's invocation-concurrency guarantee. The standard profile defaults to `CallerSerialized`; older/custom profiles without an explicit concurrency field are also treated as `CallerSerialized`. A binding may opt into `ConcurrentReads` or `ConcurrentOperations` only when the actual mounted filesystem safely supports that invocation level.
+
+The provider does not add internal synchronization merely because a stronger binding guarantee is declared. The concurrency property is therefore zero-RAM/zero-runtime-overhead metadata describing the mounted substrate, not a promise manufactured by the adapter.
+
+File mutation failure preservation is `MayModify`, and interruption atomicity is `None`.
 
 ## PreferencesKeyValueStorage
 
