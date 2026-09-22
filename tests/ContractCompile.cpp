@@ -123,13 +123,13 @@ namespace {
     );
 
     static_assert(
-        ESPressio::Persistence::Arduino::Detail::BindingConcurrency<
+        ESPressio::Persistence::Arduino::BindingDetail::BindingConcurrency<
             ContractFileSystemProfile
         >() == ESPressio::Persistence::InvocationConcurrency::CallerSerialized
     );
 
     static_assert(
-        ESPressio::Persistence::Arduino::Detail::BindingConcurrency<
+        ESPressio::Persistence::Arduino::BindingDetail::BindingConcurrency<
             ConcurrentReadFileSystemProfile
         >() == ESPressio::Persistence::InvocationConcurrency::ConcurrentReads
     );
