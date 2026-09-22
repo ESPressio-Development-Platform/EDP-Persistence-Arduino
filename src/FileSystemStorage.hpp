@@ -5,6 +5,7 @@
 #include <FS.h>
 
 #include <ESPressio_Persistence.hpp>
+#include <memory/ByteOperationsContract.hpp>
 
 namespace ESPressio::Persistence::Arduino {
 
@@ -28,19 +29,37 @@ namespace ESPressio::Persistence::Arduino {
     >
     struct FileSystemBindingProfile final {
 
+        /// Commit-boundary retention guaranteed by the bound filesystem.
         static constexpr RetentionLevel Retention = TRetention;
+
+        /// Case-sensitivity semantics guaranteed for paths.
         static constexpr TextCaseSensitivity CaseSensitivity = TCaseSensitivity;
+
+        /// Whether the backing medium can be removed while the application is running.
         static constexpr MediaRemovability Removability = TRemovability;
+
+        /// Maximum complete provider-relative path accepted by the binding.
         static constexpr std::size_t MaximumPathBytes = TMaximumPathBytes;
+
+        /// Maximum individual path segment accepted by the binding.
         static constexpr std::size_t MaximumPathSegmentBytes = TMaximumPathSegmentBytes;
+
+        /// Maximum logical file size supported by the binding.
         static constexpr StorageSize MaximumFileSize{TMaximumFileSize};
 
     };
 
 
-    /// TBindingTag distinguishes independently selectable Arduino filesystem bindings in Composition.
-    /// TBindingProfile declares the substrate guarantees supplied by the already-mounted hierarchical filesystem.
-    template<class TBindingTag, class TBindingProfile>
+    /// Adapts one already-mounted Arduino filesystem to the EDP FileStorage contract.
+    ///
+    /// @tparam TBindingTag Distinguishes independently selectable logical filesystem bindings.
+    /// @tparam TBindingProfile Declares the semantic guarantees of the mounted filesystem substrate.
+    /// @tparam TByteOperationsProvider Supplies EDP-Memory raw byte-copy operations used by the adapter.
+    template<
+        class TBindingTag,
+        class TBindingProfile,
+        class TByteOperationsProvider
+    >
     class FileSystemStorage final : public Framework::Provider<
         Domain,
         Framework::Provides<
@@ -77,6 +96,11 @@ namespace ESPressio::Persistence::Arduino {
     private:
 
         static_assert(
+            TByteOperationsProvider::CompositionCapabilities::template Contains<ESPressio::Memory::ByteOperations>,
+            "Arduino FileSystemStorage requires an EDP-Memory ByteOperations provider"
+        );
+
+        static_assert(
             TBindingProfile::MaximumPathBytes > 0U &&
             TBindingProfile::MaximumPathBytes <= 254U,
             "Arduino FileSystemStorage binding path limit must fit the provider's bounded native path buffer"
@@ -93,10 +117,20 @@ namespace ESPressio::Persistence::Arduino {
             "Arduino FileSystemStorage binding file limit must fit Arduino File::seek"
         );
 
-        // Bound Arduino filesystem.
+        /// Result of assembling one provider-native path.
+        enum class NativePathStatus : std::uint8_t {
+            Succeeded = 0U,
+            PathNotRepresentable = 1U
+        };
+
+
+        // Bound dependencies.
 
         /// Non-owning filesystem reference; Bootstrap owns mount and lifetime.
         fs::FS* FileSystem_;
+
+        /// Non-owning EDP-Memory byte-operation provider used for bounded raw copies.
+        const TByteOperationsProvider* ByteOperations_;
 
         /// Reports whether a canonical EDP path fits the binding's advertised limits.
         [[nodiscard]] static bool IsPathRepresentable(FilePathView Path) noexcept {
@@ -123,29 +157,33 @@ namespace ESPressio::Persistence::Arduino {
         }
 
         /// Converts an EDP relative path to Arduino FS's rooted path form.
-        [[nodiscard]] static bool MakeNativePath(
+        [[nodiscard]] NativePathStatus MakeNativePath(
             FilePathView Path,
             char (&Buffer)[256U]
-        ) noexcept {
+        ) const noexcept {
             if (!IsPathRepresentable(Path)) {
-                return false;
+                return NativePathStatus::PathNotRepresentable;
             }
 
             Buffer[0] = '/';
-            std::memcpy(
+            ByteOperations_->CopyBytes(
                 Buffer + 1U,
                 Path.Data(),
                 Path.Size()
             );
             Buffer[Path.Size() + 1U] = '\0';
-            return true;
+            return NativePathStatus::Succeeded;
         }
 
     public:
 
-        /// Constructs a provider bound to an already-owned Arduino filesystem object.
-        explicit FileSystemStorage(fs::FS& FileSystem) noexcept
-            : FileSystem_(&FileSystem) {}
+        /// Constructs a provider bound to caller-owned filesystem and byte-operation providers.
+        FileSystemStorage(
+            fs::FS& FileSystem,
+            const TByteOperationsProvider& ByteOperations
+        ) noexcept
+            : FileSystem_(&FileSystem),
+              ByteOperations_(&ByteOperations) {}
 
         /// Reports whether a filesystem object is bound; mounting remains the owner's responsibility.
         [[nodiscard]] bool IsFileStorageReady() const noexcept {
@@ -156,7 +194,10 @@ namespace ESPressio::Persistence::Arduino {
         [[nodiscard]] FileSizeResult GetFileSize(FilePathView Path) const noexcept {
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return {FileSizeStatus::PathTooLong, StorageSize{}};
             }
 
@@ -192,7 +233,10 @@ namespace ESPressio::Persistence::Arduino {
         ) const noexcept {
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return {FileReadStatus::PathTooLong, 0U, 0U, StorageSize{}};
             }
 
@@ -257,7 +301,10 @@ namespace ESPressio::Persistence::Arduino {
 
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return FileReplaceStatus::PathTooLong;
             }
 
@@ -301,7 +348,10 @@ namespace ESPressio::Persistence::Arduino {
         [[nodiscard]] FileRemoveStatus RemoveFile(FilePathView Path) noexcept {
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return FileRemoveStatus::PathTooLong;
             }
 
@@ -332,7 +382,10 @@ namespace ESPressio::Persistence::Arduino {
         [[nodiscard]] DirectoryCreateStatus CreateDirectory(FilePathView Path) noexcept {
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return DirectoryCreateStatus::PathTooLong;
             }
 
@@ -361,7 +414,10 @@ namespace ESPressio::Persistence::Arduino {
         [[nodiscard]] DirectoryRemoveStatus RemoveDirectory(FilePathView Path) noexcept {
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return DirectoryRemoveStatus::PathTooLong;
             }
 
@@ -407,7 +463,10 @@ namespace ESPressio::Persistence::Arduino {
             if (Directory.IsRoot()) {
                 NativePath[0] = '/';
                 NativePath[1] = '\0';
-            } else if (!MakeNativePath(Directory.Path(), NativePath)) {
+            } else if (MakeNativePath(
+                Directory.Path(),
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return {FileEnumerationStatus::PathTooLong, StorageSize{}};
             }
 
@@ -440,7 +499,7 @@ namespace ESPressio::Persistence::Arduino {
                 }
 
                 if (DeliveredSize != 0U) {
-                    std::memcpy(
+                    ByteOperations_->CopyBytes(
                         NameBuffer.Address,
                         Name,
                         DeliveredSize
@@ -496,7 +555,14 @@ namespace ESPressio::Persistence::Arduino {
             char NativeSource[256U];
             char NativeDestination[256U];
 
-            if (!MakeNativePath(Source, NativeSource) || !MakeNativePath(Destination, NativeDestination)) {
+            if (MakeNativePath(
+                Source,
+                NativeSource
+            ) != NativePathStatus::Succeeded ||
+                MakeNativePath(
+                    Destination,
+                    NativeDestination
+                ) != NativePathStatus::Succeeded) {
                 return FileRenameStatus::PathTooLong;
             }
 
@@ -521,7 +587,10 @@ namespace ESPressio::Persistence::Arduino {
         ) noexcept {
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return FileAppendStatus::PathTooLong;
             }
 
@@ -570,7 +639,10 @@ namespace ESPressio::Persistence::Arduino {
         ) noexcept {
             char NativePath[256U];
 
-            if (!MakeNativePath(Path, NativePath)) {
+            if (MakeNativePath(
+                Path,
+                NativePath
+            ) != NativePathStatus::Succeeded) {
                 return FileWriteAtStatus::PathTooLong;
             }
 
