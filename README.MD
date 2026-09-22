@@ -4,8 +4,8 @@ Concrete Arduino-ESP32 providers for the EDP-Persistence contract.
 
 ## Providers
 
-- `FileSystemStorage<TBindingTag>` adapts an already-mounted Arduino `fs::FS` instance to hierarchical `FileStorage`. Bootstrap retains ownership of mounting and the filesystem object. Directory mutation/enumeration, rename, append and bounded write-at are supported.
-- `PreferencesKeyValueStorage<TBindingTag>` adapts one caller-selected Arduino Preferences namespace to `KeyValueStorage`. Keys are limited to 15 UTF-8 bytes and values to 512 bytes. The 512-byte bound permits contract-correct truncated reads without heap allocation despite the underlying NVS whole-blob read API.
+- `FileSystemStorage<TBindingTag, TBindingProfile>` adapts an already-mounted hierarchical Arduino `fs::FS` binding to `FileStorage`. The binding profile explicitly declares retention, path case sensitivity, media removability, path/segment limits, and maximum file size. This provider is intentionally not a universal claim about every `fs::FS` substrate: use it only when the bound filesystem actually supplies the advertised hierarchical directory, rename, append, and bounded write-at operations.
+- `PreferencesKeyValueStorage<TBindingTag>` adapts one dedicated Arduino Preferences namespace to `KeyValueStorage`. NVS keys are represented using the documented ASCII key form; valid EDP UTF-8 keys outside ASCII return `KeyNotRepresentable`. Zero-length logical values are represented internally by a reserved Preferences type/value marker because `Preferences::putBytes()` rejects zero-length blobs. Non-empty logical values remain NVS blobs.
 
 `TBindingTag` is intentionally part of each provider type so independently selectable logical bindings can have distinct Composition identities.
 
@@ -15,6 +15,28 @@ Concrete Arduino-ESP32 providers for the EDP-Persistence contract.
   - EDP-Persistence
     - EDP-System
   - Arduino-ESP32
+
+## Filesystem binding profile
+
+A filesystem binding profile is part of the provider type. It is a compile-time assertion about the specific mounted filesystem, not about Arduino `fs::FS` in general.
+
+For example:
+
+```cpp
+using StorageProfile = ESPressio::Persistence::Arduino::FileSystemBindingProfile<
+    ESPressio::Persistence::RetentionLevel::Restart,
+    ESPressio::Persistence::TextCaseSensitivity::CaseSensitive,
+    ESPressio::Persistence::MediaRemovability::Fixed,
+    254U,
+    254U,
+    0xFFFFFFFFULL
+>;
+
+using StorageProvider =
+    ESPressio::Persistence::Arduino::FileSystemStorage<MyBinding, StorageProfile>;
+```
+
+Only select values that are true for the actual mounted substrate. A profile claiming `PowerLoss` means every successful mutation performed through the provider has crossed a power-loss-surviving commit boundary. The generic adapter cannot infer that guarantee from `fs::FS`.
 
 ## Lifecycle
 
