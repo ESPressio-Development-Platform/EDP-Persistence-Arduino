@@ -261,6 +261,24 @@ namespace ESPressio::Persistence::Arduino {
                 return FileReplaceStatus::PathTooLong;
             }
 
+            if (FileSystem_->exists(NativePath)) {
+                auto Existing = FileSystem_->open(
+                    NativePath,
+                    FILE_READ
+                );
+
+                if (!Existing) {
+                    return FileReplaceStatus::IoFailure;
+                }
+
+                const auto IsDirectory = Existing.isDirectory();
+                Existing.close();
+
+                if (IsDirectory) {
+                    return FileReplaceStatus::EntryTypeConflict;
+                }
+            }
+
             auto File = FileSystem_->open(
                 NativePath,
                 FILE_WRITE
@@ -291,6 +309,22 @@ namespace ESPressio::Persistence::Arduino {
                 return FileRemoveStatus::NotFound;
             }
 
+            auto Entry = FileSystem_->open(
+                NativePath,
+                FILE_READ
+            );
+
+            if (!Entry) {
+                return FileRemoveStatus::IoFailure;
+            }
+
+            const auto IsDirectory = Entry.isDirectory();
+            Entry.close();
+
+            if (IsDirectory) {
+                return FileRemoveStatus::EntryTypeConflict;
+            }
+
             return FileSystem_->remove(NativePath) ? FileRemoveStatus::Succeeded : FileRemoveStatus::IoFailure;
         }
 
@@ -303,7 +337,21 @@ namespace ESPressio::Persistence::Arduino {
             }
 
             if (FileSystem_->exists(NativePath)) {
-                return DirectoryCreateStatus::AlreadyExists;
+                auto Entry = FileSystem_->open(
+                    NativePath,
+                    FILE_READ
+                );
+
+                if (!Entry) {
+                    return DirectoryCreateStatus::IoFailure;
+                }
+
+                const auto IsDirectory = Entry.isDirectory();
+                Entry.close();
+
+                return IsDirectory
+                    ? DirectoryCreateStatus::AlreadyExists
+                    : DirectoryCreateStatus::EntryTypeConflict;
             }
 
             return FileSystem_->mkdir(NativePath) ? DirectoryCreateStatus::Succeeded : DirectoryCreateStatus::IoFailure;
@@ -321,7 +369,30 @@ namespace ESPressio::Persistence::Arduino {
                 return DirectoryRemoveStatus::NotFound;
             }
 
-            return FileSystem_->rmdir(NativePath) ? DirectoryRemoveStatus::Succeeded : DirectoryRemoveStatus::NotEmpty;
+            auto Directory = FileSystem_->open(
+                NativePath,
+                FILE_READ
+            );
+
+            if (!Directory) {
+                return DirectoryRemoveStatus::IoFailure;
+            }
+
+            if (!Directory.isDirectory()) {
+                Directory.close();
+                return DirectoryRemoveStatus::EntryTypeConflict;
+            }
+
+            auto Child = Directory.openNextFile();
+            const auto HasChildren = static_cast<bool>(Child);
+            Child.close();
+            Directory.close();
+
+            if (HasChildren) {
+                return DirectoryRemoveStatus::NotEmpty;
+            }
+
+            return FileSystem_->rmdir(NativePath) ? DirectoryRemoveStatus::Succeeded : DirectoryRemoveStatus::IoFailure;
         }
 
         /// TCallback is the caller-owned noexcept enumeration callback.
@@ -467,6 +538,11 @@ namespace ESPressio::Persistence::Arduino {
                 return FileAppendStatus::IoFailure;
             }
 
+            if (File.isDirectory()) {
+                File.close();
+                return FileAppendStatus::EntryTypeConflict;
+            }
+
             const auto ExistingSize = static_cast<std::uint64_t>(File.size());
 
             if (
@@ -505,6 +581,11 @@ namespace ESPressio::Persistence::Arduino {
 
             if (!File) {
                 return FileWriteAtStatus::NotFound;
+            }
+
+            if (File.isDirectory()) {
+                File.close();
+                return FileWriteAtStatus::EntryTypeConflict;
             }
 
             const auto Size = static_cast<std::uint64_t>(File.size());
