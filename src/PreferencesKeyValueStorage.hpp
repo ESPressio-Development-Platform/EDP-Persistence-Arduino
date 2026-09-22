@@ -269,11 +269,19 @@ namespace ESPressio::Persistence::Arduino {
 
             if (TransferSize != 0U) {
                 if (CompleteSize <= Destination.Capacity) {
-                    if (Preferences_.getBytes(NativeKey, Destination.Address, CompleteSize) != CompleteSize) {
+                    if (Preferences_.getBytes(
+                        NativeKey,
+                        Destination.Address,
+                        CompleteSize
+                    ) != CompleteSize) {
                         return {KeyValueReadStatus::IoFailure, 0U, 0U, StorageSize{}};
                     }
                 } else {
-                    if (Preferences_.getBytes(NativeKey, ReadScratch_, CompleteSize) != CompleteSize) {
+                    if (Preferences_.getBytes(
+                        NativeKey,
+                        ReadScratch_,
+                        CompleteSize
+                    ) != CompleteSize) {
                         return {KeyValueReadStatus::IoFailure, 0U, 0U, StorageSize{}};
                     }
 
