@@ -87,6 +87,10 @@ def main():
                 component_include = header.parent.parent.parent
                 if component_include.is_dir():
                     includes.append(component_include)
+            for config_header in framework_libs.rglob("FreeRTOSConfig.h"):
+                config_include = config_header.parent
+                if config_include.is_dir():
+                    includes.append(config_include)
         command = [
             str(compiler),
             "-std=gnu++20",
