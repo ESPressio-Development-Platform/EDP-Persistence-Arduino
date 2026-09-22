@@ -75,16 +75,18 @@ def main():
             framework / "libraries" / "Preferences" / "src",
         ]
         if framework_libs:
+            include_root = framework_libs / "include"
+            includes.append(include_root)
             includes.extend(
                 path
-                for path in (framework_libs / "include").glob("*/include")
+                for path in include_root.rglob("include")
                 if path.is_dir()
             )
-            includes.extend(
-                path
-                for path in (framework_libs / "include").glob("*")
-                if path.is_dir()
-            )
+            freertos_headers = list(framework_libs.rglob("freertos/FreeRTOS.h"))
+            for header in freertos_headers:
+                component_include = header.parent.parent.parent
+                if component_include.is_dir():
+                    includes.append(component_include)
         command = [
             str(compiler),
             "-std=gnu++20",
