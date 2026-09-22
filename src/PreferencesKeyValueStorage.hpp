@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstring>
-
 #include <Preferences.h>
 
 #include <ESPressio_Persistence.hpp>
@@ -79,6 +77,8 @@ namespace ESPressio::Persistence::Arduino {
 
         /// Indicates whether Begin() successfully opened the namespace.
         bool IsReady_;
+
+        // Native key representation helpers.
 
         /// Result of converting an EDP key to the native Preferences key representation.
         enum class KeyCopyStatus : std::uint8_t {
