@@ -13,12 +13,13 @@ namespace ESPressio::Persistence::Arduino {
 
 
     /// Declares the compile-time guarantees of one hierarchical Arduino filesystem binding.
-    /// TRetention is the commit-boundary retention guaranteed by the bound filesystem.
-    /// TCaseSensitivity is the path comparison behaviour of the bound filesystem.
-    /// TRemovability describes whether the backing medium can disappear while the system is running.
-    /// TMaximumPathBytes is the largest complete EDP path accepted by the binding.
-    /// TMaximumPathSegmentBytes is the largest individual path segment accepted by the binding.
-    /// TMaximumFileSize is the largest logical file supported by the binding.
+    ///
+    /// @tparam TRetention Commit-boundary retention guaranteed by the bound filesystem.
+    /// @tparam TCaseSensitivity Path comparison behaviour guaranteed by the bound filesystem.
+    /// @tparam TRemovability Whether the backing medium can disappear while the system is running.
+    /// @tparam TMaximumPathBytes Largest complete EDP path accepted by the binding.
+    /// @tparam TMaximumPathSegmentBytes Largest individual path segment accepted by the binding.
+    /// @tparam TMaximumFileSize Largest logical file supported by the binding.
     template<
         RetentionLevel TRetention,
         TextCaseSensitivity TCaseSensitivity,
@@ -140,6 +141,8 @@ namespace ESPressio::Persistence::Arduino {
         /// Non-owning EDP-Memory byte-operation provider used for bounded raw copies.
         const TByteOperationsProvider* ByteOperations_;
 
+        // Path conversion and representation helpers.
+
         /// Reports whether a canonical EDP path fits the binding's advertised limits.
         [[nodiscard]] static bool IsPathRepresentable(FilePathView Path) noexcept {
             if (Path.Size() > TBindingProfile::MaximumPathBytes) {
@@ -185,6 +188,8 @@ namespace ESPressio::Persistence::Arduino {
 
     public:
 
+        // Construction and readiness.
+
         /// Constructs a provider bound to caller-owned filesystem and byte-operation providers.
         FileSystemStorage(
             fs::FS& FileSystem,
@@ -197,6 +202,8 @@ namespace ESPressio::Persistence::Arduino {
         [[nodiscard]] bool IsFileStorageReady() const noexcept {
             return FileSystem_ != nullptr;
         }
+
+        // FileStorage contract.
 
         /// Returns the size of an existing regular file.
         [[nodiscard]] FileSizeResult GetFileSize(FilePathView Path) const noexcept {
