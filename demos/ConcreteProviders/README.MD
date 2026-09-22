@@ -1,18 +1,40 @@
 # Concrete Providers Demo
 
-This demo exercises both concrete Arduino Persistence providers with real platform storage:
+This demo exercises both concrete Arduino Persistence providers with real platform storage and an explicit EDP-Memory ByteOperations provider.
 
-- `FileSystemStorage` uses an SD card through Arduino `SD`. The binding profile deliberately advertises conservative guarantees: restart retention, case-insensitive FAT paths, removable media, a 63-byte path limit, a 31-byte segment limit, and a 4096-byte maximum logical file.
-- `PreferencesKeyValueStorage` stores, reads, replaces with a present zero-length value, queries that zero-length value, and removes the key.
+The demo selects `EDP-Platform-Portable::Memory::ByteOperationsProvider` as the standard C/C++ implementation of `EDP-Memory::ByteOperations`.
 
 ## Hardware
 
 Use an ESP32 target with an SD card connected to the board's default Arduino `SD` pins. The key/value portion uses the board's normal NVS/Preferences partition.
 
+## Dependencies
+
+Install or provide:
+
+- EDP-Persistence-Arduino;
+- EDP-Persistence;
+- EDP-Memory;
+- EDP-Platform;
+- EDP-Platform-Portable;
+- EDP-System;
+- Arduino-ESP32.
+
 ## Targets
 
-- `Arduino_IDE` — install EDP-Persistence-Arduino, EDP-Persistence and EDP-System as Arduino libraries, then open `ConcreteProviders.ino`.
-- `PlatformIO_Arduino` — Arduino-ESP32 target.
-- `PlatformIO_ESP-IDF` — ESP-IDF target with Arduino included as an ESP-IDF component through PlatformIO's `framework = arduino, espidf` mode.
+- `Arduino_IDE` — open `ConcreteProviders.ino` after installing the dependencies above.
+- `PlatformIO_Arduino` — uses the maintained PIOArduino platform package and C++20.
+- `PlatformIO_ESP-IDF` — uses Arduino as an ESP-IDF component through the maintained PIOArduino platform package and C++20.
 
-All variants use C++20.
+See [../../docs/BUILDING.MD](../../docs/BUILDING.MD) for the exact C++20/PIOArduino baseline.
+
+## Demonstrated semantics
+
+- `FileSystemStorage` uses an SD card through Arduino `SD`.
+- The demo filesystem profile advertises restart retention, case-insensitive FAT paths, removable media, a 63-byte path limit, a 31-byte segment limit, and a 4096-byte maximum logical file.
+- `PreferencesKeyValueStorage` stores, reads, replaces with a present zero-length value, queries that value, and removes the key.
+- Both providers receive the same caller-owned ByteOperations provider.
+
+## ISR boundary
+
+The demo deliberately performs all Persistence work from ordinary execution context. These providers are not ISR-safe and must not be called from ISR context.
