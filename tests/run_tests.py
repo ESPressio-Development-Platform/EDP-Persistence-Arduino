@@ -112,16 +112,17 @@ def main():
             # that are not themselves named "include" (for example soc headers).
             # Derive an include root from every header path whose suffix starts
             # with a known public namespace directory.
-            public_namespaces = ("soc", "hal", "esp_private", "freertos")
-            for header in framework_libs.rglob("*.h"):
-                parts = header.parts
-                for namespace in public_namespaces:
-                    if namespace in parts:
-                        index = len(parts) - 1 - list(reversed(parts)).index(namespace)
-                        namespace_root = Path(*parts[:index])
-                        if namespace_root.is_dir():
-                            includes.append(namespace_root)
-                        break
+            # The packaged IDF tree contains public component headers both
+            # below named include directories and directly below component
+            # directories. For a compile-only contract probe, add each header's
+            # containing directory. This deliberately avoids reconstructing the
+            # full PlatformIO/SCons component graph and does not affect product
+            # code or linking.
+            includes.extend(
+                header.parent
+                for header in framework_libs.rglob("*.h")
+                if header.parent.is_dir()
+            )
             portmacro_headers = list(framework_libs.rglob("portmacro.h"))
             if not portmacro_headers:
                 print("ERROR: portmacro.h was not found in the installed Arduino-ESP32 libraries package.", file=sys.stderr)
