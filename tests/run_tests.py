@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import argparse, shutil, subprocess, sys, tempfile
+import argparse, os, shutil, subprocess, sys, tempfile
 
 def sibling(root, *names):
     for name in names:
@@ -53,8 +53,10 @@ build_unflags =
     -std=gnu++17
 """)
         print(f"PlatformIO: {pio}\nEDP-Persistence-Arduino: {root}\nEDP-Persistence: {persistence}\nEDP-System: {system}\nBuild directory: {build}\n\n[1/1] Compiling Arduino concrete contract...")
-        cmd=[pio,"run","-d",str(build)]+(["-v"] if a.verbose else [])
-        rc=subprocess.run(cmd,check=False).returncode
+        env = dict(os.environ)
+        env["PLATFORMIO_BUILD_FLAGS"] = env.get("PLATFORMIO_BUILD_FLAGS", "")
+        cmd=[pio,"run","-d",str(build),"-t","compiledb"]+(["-v"] if a.verbose else [])
+        rc=subprocess.run(cmd,check=False,env=env).returncode
         print("\nPASS: Arduino concrete Persistence providers compiled and satisfied the abstract contract." if rc==0 else "\nFAIL: Arduino concrete contract did not compile.")
         return rc
     finally:
