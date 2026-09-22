@@ -2,33 +2,48 @@
 
 Concrete Arduino-ESP32 providers for the EDP-Persistence contract.
 
+This repository is the explicit Arduino concrete sibling of the SDK-neutral `EDP-Persistence` repository. Its direct Arduino SDK references are permitted by the domain-specific exception in `Policy/V2/ABSTRACTION.MD`.
+
 ## Providers
 
-- `FileSystemStorage<TBindingTag, TBindingProfile>` adapts an already-mounted hierarchical Arduino `fs::FS` binding to `FileStorage`. The binding profile explicitly declares retention, path case sensitivity, media removability, path/segment limits, and maximum file size. This provider is intentionally not a universal claim about every `fs::FS` substrate: use it only when the bound filesystem actually supplies the advertised hierarchical directory, rename, append, and bounded write-at operations.
-- `PreferencesKeyValueStorage<TBindingTag>` adapts one dedicated Arduino Preferences namespace to `KeyValueStorage`. NVS keys are represented using the documented ASCII key form; valid EDP UTF-8 keys outside ASCII return `KeyNotRepresentable`. Zero-length logical values are represented internally by a reserved Preferences type/value marker because `Preferences::putBytes()` rejects zero-length blobs. Non-empty logical values remain NVS blobs.
+- `FileSystemStorage<TBindingTag, TBindingProfile, TByteOperationsProvider>` adapts an already-mounted hierarchical Arduino `fs::FS` binding to `FileStorage`.
+- `PreferencesKeyValueStorage<TBindingTag, TByteOperationsProvider>` adapts one dedicated Arduino Preferences namespace to `KeyValueStorage`.
 
-`TBindingTag` is intentionally part of each provider type so independently selectable logical bindings can have distinct Composition identities.
+`TBindingTag` gives independently selectable logical bindings distinct Composition identities.
+
+`TByteOperationsProvider` must satisfy `EDP-Memory::ByteOperations`. The provider is supplied by Bootstrap, held non-owningly, and must outlive the Persistence provider. All raw byte copies performed by these adapters route through that Memory capability.
 
 ## Documentation
 
-- [Concrete provider contracts](./docs/PROVIDERS.MD) — provider semantics, lifecycle, ownership, memory, failure guarantees and Composition integration.
+- [Concrete provider contracts](./docs/PROVIDERS.MD) — provider semantics, lifecycle, ownership, Memory integration, ISR boundary, failure guarantees, and Composition integration.
+- [Build baseline](./docs/BUILDING.MD) — mandatory C++20 baseline, PIOArduino recommendation, and exact PlatformIO-compatible configuration.
+- [Concrete Providers demo](./demos/ConcreteProviders/README.MD) — hardware expectations and target-specific build surfaces.
 
 ## Dependencies
 
 - EDP-Persistence-Arduino
-  - EDP-Persistence
-    - EDP-System
-  - Arduino-ESP32
+  - EDP-Persistence **[mandatory]**
+    - EDP-System **[transitive]**
+  - EDP-Memory **[mandatory]**
+    - EDP-System **[transitive]**
+    - EDP-Platform **[transitive]**
+  - Arduino-ESP32 **[mandatory concrete SDK]**
+  - EDP-Platform-Portable **[optional: supplied tests/demos use its standard ByteOperations provider]**
 
-[Dependency graph](./DEPENDENCY_GRAPH.MD)
+A consuming application may replace EDP-Platform-Portable with any provider satisfying `EDP-Memory::ByteOperations`.
+
+See [DEPENDENCY_GRAPH.MD](./DEPENDENCY_GRAPH.MD) for the maintained dependency graph.
 
 ## Filesystem binding profile
 
-A filesystem binding profile is part of the provider type. It is a compile-time assertion about the specific mounted filesystem, not about Arduino `fs::FS` in general.
+A filesystem binding profile is a compile-time assertion about the specific mounted filesystem, not about Arduino `fs::FS` in general.
 
 For example:
 
 ```cpp
+using ByteOperationsProvider =
+    ESPressio::Platform::Portable::Memory::ByteOperationsProvider;
+
 using StorageProfile = ESPressio::Persistence::Arduino::FileSystemBindingProfile<
     ESPressio::Persistence::RetentionLevel::Restart,
     ESPressio::Persistence::TextCaseSensitivity::CaseSensitive,
@@ -39,33 +54,50 @@ using StorageProfile = ESPressio::Persistence::Arduino::FileSystemBindingProfile
 >;
 
 using StorageProvider =
-    ESPressio::Persistence::Arduino::FileSystemStorage<MyBinding, StorageProfile>;
+    ESPressio::Persistence::Arduino::FileSystemStorage<
+        MyBinding,
+        StorageProfile,
+        ByteOperationsProvider
+    >;
 ```
 
-Only select values that are true for the actual mounted substrate. A profile claiming `PowerLoss` means every successful mutation performed through the provider has crossed a power-loss-surviving commit boundary. The generic adapter cannot infer that guarantee from `fs::FS`.
+Only select values which are true for the mounted substrate. A profile claiming `PowerLoss` means every successful mutation performed through the provider has crossed a power-loss-surviving commit boundary.
 
 ## Lifecycle
 
-The providers do not take ownership of platform lifecycle. The application must mount the selected filesystem before constructing/using `FileSystemStorage` and keep that mount and `fs::FS` object valid for the provider's complete use lifetime. For Preferences, call `Begin(namespace)` during Bootstrap and `End()` during teardown. The bound Preferences namespace is provider-owned for its use lifetime: other code must not insert native Preferences values into the same namespace because the provider reserves its native representation (including the marker used for a present zero-length logical value).
+The application must mount the selected filesystem before constructing `FileSystemStorage`. The filesystem object, mount, and ByteOperations provider must all remain valid for the provider's complete lifetime.
+
+For Preferences, construct the provider with the selected ByteOperations provider, then call `Begin(namespace)` during Bootstrap. `Begin()` returns `PreferencesBeginStatus::Succeeded` or `PreferencesBeginStatus::ProviderFailure`. Call `End()` during teardown.
+
+The bound Preferences namespace is dedicated to this provider while open because the provider reserves its native representation for logical values, including its present-zero-length marker.
 
 ## Concurrency and memory
 
-Both providers advertise `CallerSerialized`. They perform no per-operation dynamic allocation themselves. Preferences contains one bounded 512-byte scratch buffer because NVS cannot partially retrieve a blob; it is used only when the caller destination requires truncation.
+Both providers advertise `CallerSerialized` and perform no per-operation dynamic allocation themselves.
 
-## Demos
+Preferences contains one bounded 512-byte scratch buffer because native NVS retrieval cannot partially retrieve a blob. Truncated-copy transfer from that scratch buffer uses the injected EDP-Memory ByteOperations provider.
 
-- [Concrete Providers](./demos/ConcreteProviders/README.MD) — exercises both FileStorage and KeyValueStorage concrete providers across the required Arduino IDE, PlatformIO Arduino, and PlatformIO ESP-IDF demo surfaces.
+## ISR boundary
+
+These providers are not ISR-safe and make no ISR-safety guarantee. Do not perform Persistence filesystem, Preferences, lifecycle, enumeration, read, or mutation work from an ISR. Capture only minimal ISR-local state and defer Persistence work to ordinary execution context.
+
+## Build baseline
+
+C++20 is mandatory. New Arduino builds should use PIOArduino. See [Build baseline](./docs/BUILDING.MD) for the exact supported configuration.
 
 ## Validation
 
-Concrete SDK compilation and hardware/runtime tests belong in this repository. The abstract contract is validated independently by EDP-Persistence.
-
-## Local contract compilation
-
-From this repository root, with sibling `EDP-Persistence` and `EDP-System` checkouts present, run:
+From the repository root, with sibling `EDP-Persistence`, `EDP-Memory`, `EDP-Platform`, `EDP-Platform-Portable`, and `EDP-System` checkouts present:
 
 ```bash
 python3 tests/run_tests.py
 ```
 
-The runner performs four validation stages: it compiles and executes `tests/ProviderBehaviorTests.cpp` on the host against bounded Arduino SDK test doubles, source-compiles both PlatformIO demo translation units against bounded demo stubs, then compiles `tests/ContractCompile.cpp` against the real Arduino-ESP32 SDK and real sibling EDP contract repositories. The behavior tests exercise adapter-owned semantics including truncation, size limits, append/write-at, key representability, present zero-length values, and clear/remove behavior. The demo-source stages deliberately bypass PlatformIO package orchestration so C++/provider API validation remains available even when the local PlatformIO package manager is unhealthy. Use `--host-compiler` to override the host compiler and `--keep-build` to retain generated files for diagnosis.
+The runner validates:
+
+1. complete concrete provider behavior/lifecycle coverage;
+2. PlatformIO Arduino demo source;
+3. PlatformIO ESP-IDF demo source;
+4. the concrete providers against the installed real Arduino-ESP32 SDK/toolchain.
+
+The runner also accepts explicit `--persistence`, `--memory`, `--platform`, `--platform-portable`, and `--system` paths when sibling discovery is not suitable.
