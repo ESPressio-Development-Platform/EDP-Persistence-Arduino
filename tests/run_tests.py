@@ -30,6 +30,9 @@ def main():
     parser.add_argument("--host-compiler")
     parser.add_argument("--platformio-home")
     parser.add_argument("--persistence")
+    parser.add_argument("--memory")
+    parser.add_argument("--platform")
+    parser.add_argument("--platform-portable")
     parser.add_argument("--system")
     parser.add_argument("--keep-build", action="store_true")
     parser.add_argument("--verbose", action="store_true")
@@ -38,6 +41,13 @@ def main():
     root = Path(__file__).resolve().parents[1]
     home = Path(args.platformio_home).expanduser().resolve() if args.platformio_home else Path.home() / ".platformio"
     persistence = Path(args.persistence).resolve() if args.persistence else sibling(root, "EDP-Persistence")
+    memory = Path(args.memory).resolve() if args.memory else sibling(root, "EDP-Memory")
+    platform = Path(args.platform).resolve() if args.platform else sibling(root, "EDP-Platform")
+    platform_portable = (
+        Path(args.platform_portable).resolve()
+        if args.platform_portable
+        else sibling(root, "EDP-Platform-Portable")
+    )
     system = Path(args.system).resolve() if args.system else sibling(root, "EDP-System", "ESPressio-System")
     framework = first_existing(
         home / "packages" / "framework-arduinoespressif32",
@@ -63,6 +73,9 @@ def main():
 
     missing = []
     if not persistence: missing.append("sibling EDP-Persistence checkout")
+    if not memory: missing.append("sibling EDP-Memory checkout")
+    if not platform: missing.append("sibling EDP-Platform checkout")
+    if not platform_portable: missing.append("sibling EDP-Platform-Portable checkout")
     if not system: missing.append("sibling EDP-System checkout")
     if not framework: missing.append("Arduino-ESP32 framework package under ~/.platformio/packages")
     if not framework_libs: missing.append("Arduino-ESP32 ESP-IDF libraries package under ~/.platformio/packages")
@@ -91,6 +104,12 @@ def main():
             str(root / "src"),
             "-I",
             str(persistence / "src"),
+            "-I",
+            str(memory / "src"),
+            "-I",
+            str(platform / "src"),
+            "-I",
+            str(platform_portable / "src"),
             "-I",
             str(system / "src"),
             str(behavior_source),
@@ -184,6 +203,9 @@ def main():
         includes = [
             root / "src",
             persistence / "src",
+            memory / "src",
+            platform / "src",
+            platform_portable / "src",
             system / "src",
             framework / "cores" / "esp32",
             framework / "variants" / "esp32",
@@ -290,6 +312,9 @@ def main():
         print(f"Arduino-ESP32 IDF libraries: {framework_libs}")
         print(f"EDP-Persistence-Arduino: {root}")
         print(f"EDP-Persistence: {persistence}")
+        print(f"EDP-Memory: {memory}")
+        print(f"EDP-Platform: {platform}")
+        print(f"EDP-Platform-Portable: {platform_portable}")
         print(f"EDP-System: {system}")
         print(f"Build directory: {build}")
         print("\n[4/4] Compiling Arduino concrete contract directly...")
