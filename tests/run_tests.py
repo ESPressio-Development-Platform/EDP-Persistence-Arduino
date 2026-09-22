@@ -1,65 +1,117 @@
 #!/usr/bin/env python3
+"""Compile concrete Arduino Persistence providers without invoking PlatformIO orchestration."""
+
 from pathlib import Path
-import argparse, os, shutil, subprocess, sys, tempfile
+import argparse
+import shutil
+import subprocess
+import sys
+import tempfile
+
 
 def sibling(root, *names):
     for name in names:
-        p = root.parent / name
-        if p.is_dir(): return p.resolve()
+        candidate = root.parent / name
+        if candidate.is_dir():
+            return candidate.resolve()
     return None
 
+
+def first_existing(*paths):
+    for path in paths:
+        if path and path.exists():
+            return path.resolve()
+    return None
+
+
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("--pio"); ap.add_argument("--persistence"); ap.add_argument("--system"); ap.add_argument("--keep-build",action="store_true"); ap.add_argument("--verbose",action="store_true"); a=ap.parse_args()
-    root=Path(__file__).resolve().parents[1]
-    persistence=Path(a.persistence).resolve() if a.persistence else sibling(root,"EDP-Persistence")
-    system=Path(a.system).resolve() if a.system else sibling(root,"EDP-System","ESPressio-System")
-    pio=a.pio or shutil.which("pio") or shutil.which("platformio")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--compiler")
+    parser.add_argument("--platformio-home")
+    parser.add_argument("--persistence")
+    parser.add_argument("--system")
+    parser.add_argument("--keep-build", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
+    args = parser.parse_args()
+
+    root = Path(__file__).resolve().parents[1]
+    home = Path(args.platformio_home).expanduser().resolve() if args.platformio_home else Path.home() / ".platformio"
+    persistence = Path(args.persistence).resolve() if args.persistence else sibling(root, "EDP-Persistence")
+    system = Path(args.system).resolve() if args.system else sibling(root, "EDP-System", "ESPressio-System")
+    framework = first_existing(
+        home / "packages" / "framework-arduinoespressif32",
+    )
+    compiler = Path(args.compiler).expanduser().resolve() if args.compiler else first_existing(
+        home / "packages" / "toolchain-xtensa-esp-elf" / "bin" / "xtensa-esp32-elf-g++",
+        home / "packages" / "toolchain-xtensa-esp32" / "bin" / "xtensa-esp32-elf-g++",
+    )
+
     missing = []
-    if not pio: missing.append("PlatformIO executable ('pio' or 'platformio')")
     if not persistence: missing.append("sibling EDP-Persistence checkout")
     if not system: missing.append("sibling EDP-System checkout")
+    if not framework: missing.append("Arduino-ESP32 framework package under ~/.platformio/packages")
+    if not compiler: missing.append("Xtensa ESP32 C++ compiler under ~/.platformio/packages")
     if missing:
-        print("ERROR: missing required test dependency:", file=sys.stderr)
+        print("ERROR: missing required compile dependency:", file=sys.stderr)
         for item in missing:
             print(f"  - {item}", file=sys.stderr)
-        if not pio:
-            print("\nPlatformIO is not available on PATH. If it is installed elsewhere, run:", file=sys.stderr)
-            print("  python3 tests/run_tests.py --pio /path/to/pio", file=sys.stderr)
-        if not persistence:
-            print("\nExpected EDP-Persistence beside this repository, or pass --persistence /path/to/EDP-Persistence.", file=sys.stderr)
-        if not system:
-            print("\nExpected EDP-System beside this repository, or pass --system /path/to/EDP-System.", file=sys.stderr)
         return 2
-    build=Path(tempfile.mkdtemp(prefix="edp-persistence-arduino-tests-"))
+
+    build = Path(tempfile.mkdtemp(prefix="edp-persistence-arduino-tests-"))
     try:
-        (build/"src").mkdir(); shutil.copy2(root/"tests"/"ContractCompile.cpp",build/"src"/"main.cpp")
-        (build/"platformio.ini").write_text(f"""[platformio]
-default_envs = contract
-[env:contract]
-platform = espressif32
-framework = arduino
-board = esp32dev
-lib_ldf_mode = deep+
-build_flags =
-    -std=gnu++20
-    -I{root/"src"}
-    -I{persistence/"src"}
-    -I{system/"src"}
-    -I$PROJECT_PACKAGES_DIR/framework-arduinoespressif32/libraries/FS/src
-    -I$PROJECT_PACKAGES_DIR/framework-arduinoespressif32/libraries/Preferences/src
-build_unflags =
-    -std=gnu++11
-    -std=gnu++14
-    -std=gnu++17
-""")
-        print(f"PlatformIO: {pio}\nEDP-Persistence-Arduino: {root}\nEDP-Persistence: {persistence}\nEDP-System: {system}\nBuild directory: {build}\n\n[1/1] Compiling Arduino concrete contract...")
-        env = dict(os.environ)
-        env["PLATFORMIO_BUILD_FLAGS"] = env.get("PLATFORMIO_BUILD_FLAGS", "")
-        cmd=[pio,"run","-d",str(build),"-t","compiledb"]+(["-v"] if a.verbose else [])
-        rc=subprocess.run(cmd,check=False,env=env).returncode
-        print("\nPASS: Arduino concrete Persistence providers compiled and satisfied the abstract contract." if rc==0 else "\nFAIL: Arduino concrete contract did not compile.")
-        return rc
+        source = root / "tests" / "ContractCompile.cpp"
+        object_file = build / "ContractCompile.o"
+        includes = [
+            root / "src",
+            persistence / "src",
+            system / "src",
+            framework / "cores" / "esp32",
+            framework / "variants" / "esp32",
+            framework / "libraries" / "FS" / "src",
+            framework / "libraries" / "Preferences" / "src",
+        ]
+        command = [
+            str(compiler),
+            "-std=gnu++20",
+            "-Wall",
+            "-Wextra",
+            "-Wpedantic",
+            "-Werror",
+            "-DESP32",
+            "-DARDUINO_ARCH_ESP32",
+            "-DARDUINO=10819",
+            "-c",
+            str(source),
+            "-o",
+            str(object_file),
+        ]
+        for include in includes:
+            command.extend(["-I", str(include)])
+
+        print(f"Compiler: {compiler}")
+        print(f"Arduino-ESP32: {framework}")
+        print(f"EDP-Persistence-Arduino: {root}")
+        print(f"EDP-Persistence: {persistence}")
+        print(f"EDP-System: {system}")
+        print(f"Build directory: {build}")
+        print("\n[1/1] Compiling Arduino concrete contract directly...")
+
+        if args.verbose:
+            print(" ".join(command))
+
+        result = subprocess.run(command, check=False)
+        if result.returncode != 0:
+            print("\nFAIL: Arduino concrete contract did not compile.", file=sys.stderr)
+            return result.returncode
+
+        print("\nPASS: Arduino concrete Persistence providers compiled and satisfied the abstract contract.")
+        return 0
     finally:
-        if a.keep_build: print(f"Build retained: {build}")
-        else: shutil.rmtree(build,ignore_errors=True)
-if __name__=="__main__": raise SystemExit(main())
+        if args.keep_build:
+            print(f"Build retained: {build}")
+        else:
+            shutil.rmtree(build, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
