@@ -68,4 +68,4 @@ From this repository root, with sibling `EDP-Persistence` and `EDP-System` check
 python3 tests/run_tests.py
 ```
 
-The runner creates an isolated temporary project and compiles `tests/ContractCompile.cpp` against the real platform SDK and real sibling EDP contract repositories. Use `--keep-build` to retain the generated project for diagnosis.
+The runner performs two validation stages: it first compiles and executes `tests/ProviderBehaviorTests.cpp` on the host against bounded Arduino SDK test doubles, then compiles `tests/ContractCompile.cpp` against the real Arduino-ESP32 SDK and real sibling EDP contract repositories. The behavior tests exercise adapter-owned semantics including truncation, size limits, append/write-at, key representability, present zero-length values, and clear/remove behavior. Use `--host-compiler` to override the host compiler and `--keep-build` to retain generated files for diagnosis.
