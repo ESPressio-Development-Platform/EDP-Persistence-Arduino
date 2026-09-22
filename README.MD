@@ -66,6 +66,8 @@ Only select values which are true for the mounted substrate. A profile claiming 
 
 The final `InvocationConcurrency` template argument is optional and defaults to `CallerSerialized`, preserving the conservative behavior of existing profiles. Set it to `ConcurrentReads` only when the mounted filesystem genuinely permits safe concurrent read-side invocations. The provider adds no lock or runtime state for this guarantee; it advertises the binding fact exactly as supplied. Existing custom binding-profile types which do not expose a concurrency field also remain conservatively `CallerSerialized`.
 
+A stronger concurrency value is a guarantee about the complete bound provider configuration, including the selected ByteOperations dependency. The supplied FAT demos use the stateless `EDP-Platform-Portable::Memory::ByteOperationsProvider`; applications using another ByteOperations concrete must ensure that dependency is compatible with the advertised invocation level.
+
 ## Lifecycle
 
 The application must mount the selected filesystem before constructing `FileSystemStorage`. The filesystem object, mount, and ByteOperations provider must all remain valid for the provider's complete lifetime.
