@@ -41,7 +41,7 @@ namespace ESPressio::Persistence::Arduino {
         // Bound Preferences namespace.
 
         /// Arduino Preferences object owning the open NVS handle.
-        Preferences Preferences_;
+        mutable Preferences Preferences_;
 
         /// Bounded scratch space used only when the caller requests a truncated blob read.
         mutable std::uint8_t ReadScratch_[512U];
