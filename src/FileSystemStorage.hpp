@@ -11,21 +11,49 @@ namespace ESPressio::Persistence::Arduino {
     namespace Framework = ESPressio::System::CompositionFramework;
 
 
+    /// Declares the compile-time guarantees of one hierarchical Arduino filesystem binding.
+    /// TRetention is the commit-boundary retention guaranteed by the bound filesystem.
+    /// TCaseSensitivity is the path comparison behaviour of the bound filesystem.
+    /// TRemovability describes whether the backing medium can disappear while the system is running.
+    /// TMaximumPathBytes is the largest complete EDP path accepted by the binding.
+    /// TMaximumPathSegmentBytes is the largest individual path segment accepted by the binding.
+    /// TMaximumFileSize is the largest logical file supported by the binding.
+    template<
+        RetentionLevel TRetention,
+        TextCaseSensitivity TCaseSensitivity,
+        MediaRemovability TRemovability,
+        std::size_t TMaximumPathBytes,
+        std::size_t TMaximumPathSegmentBytes,
+        std::uint64_t TMaximumFileSize
+    >
+    struct FileSystemBindingProfile final {
+
+        static constexpr RetentionLevel Retention = TRetention;
+        static constexpr TextCaseSensitivity CaseSensitivity = TCaseSensitivity;
+        static constexpr MediaRemovability Removability = TRemovability;
+        static constexpr std::size_t MaximumPathBytes = TMaximumPathBytes;
+        static constexpr std::size_t MaximumPathSegmentBytes = TMaximumPathSegmentBytes;
+        static constexpr StorageSize MaximumFileSize{TMaximumFileSize};
+
+    };
+
+
     /// TBindingTag distinguishes independently selectable Arduino filesystem bindings in Composition.
-    template<class TBindingTag>
+    /// TBindingProfile declares the substrate guarantees supplied by the already-mounted hierarchical filesystem.
+    template<class TBindingTag, class TBindingProfile>
     class FileSystemStorage final : public Framework::Provider<
         Domain,
         Framework::Provides<
             Framework::Offer<
                 FileStorage,
                 Framework::PropertyValue<FileAccessMode, AccessMode::ReadWrite>,
-                Framework::PropertyValue<FileRetention, RetentionLevel::PowerLoss>,
+                Framework::PropertyValue<FileRetention, TBindingProfile::Retention>,
                 Framework::PropertyValue<FileHierarchyMode, FileHierarchy::Hierarchical>,
-                Framework::PropertyValue<FilePathCaseSensitivity, TextCaseSensitivity::CaseSensitive>,
-                Framework::PropertyValue<FileMediaRemovability, MediaRemovability::Fixed>,
-                Framework::PropertyValue<MaximumPathBytes, std::size_t{254U}>,
-                Framework::PropertyValue<MaximumPathSegmentBytes, std::size_t{254U}>,
-                Framework::PropertyValue<MaximumFileSize, StorageSize{0xFFFFFFFFULL}>,
+                Framework::PropertyValue<FilePathCaseSensitivity, TBindingProfile::CaseSensitivity>,
+                Framework::PropertyValue<FileMediaRemovability, TBindingProfile::Removability>,
+                Framework::PropertyValue<MaximumPathBytes, TBindingProfile::MaximumPathBytes>,
+                Framework::PropertyValue<MaximumPathSegmentBytes, TBindingProfile::MaximumPathSegmentBytes>,
+                Framework::PropertyValue<MaximumFileSize, TBindingProfile::MaximumFileSize>,
                 Framework::PropertyValue<DirectoryMutationSupport, Support::Supported>,
                 Framework::PropertyValue<DirectoryEnumerationSupport, Support::Supported>,
                 Framework::PropertyValue<RenameSupport, Support::Supported>,
@@ -48,17 +76,58 @@ namespace ESPressio::Persistence::Arduino {
     > {
     private:
 
+        static_assert(
+            TBindingProfile::MaximumPathBytes > 0U &&
+            TBindingProfile::MaximumPathBytes <= 254U,
+            "Arduino FileSystemStorage binding path limit must fit the provider's bounded native path buffer"
+        );
+
+        static_assert(
+            TBindingProfile::MaximumPathSegmentBytes > 0U &&
+            TBindingProfile::MaximumPathSegmentBytes <= TBindingProfile::MaximumPathBytes,
+            "Arduino FileSystemStorage binding segment limit must be non-zero and no larger than the path limit"
+        );
+
+        static_assert(
+            TBindingProfile::MaximumFileSize.RawValue <= 0xFFFFFFFFULL,
+            "Arduino FileSystemStorage binding file limit must fit Arduino File::seek"
+        );
+
         // Bound Arduino filesystem.
 
         /// Non-owning filesystem reference; Bootstrap owns mount and lifetime.
         fs::FS* FileSystem_;
+
+        /// Reports whether a canonical EDP path fits the binding's advertised limits.
+        [[nodiscard]] static bool IsPathRepresentable(FilePathView Path) noexcept {
+            if (Path.Size() > TBindingProfile::MaximumPathBytes) {
+                return false;
+            }
+
+            std::size_t SegmentSize = 0U;
+
+            for (std::size_t Index = 0U; Index < Path.Size(); ++Index) {
+                if (Path.Data()[Index] == '/') {
+                    if (SegmentSize > TBindingProfile::MaximumPathSegmentBytes) {
+                        return false;
+                    }
+
+                    SegmentSize = 0U;
+                    continue;
+                }
+
+                ++SegmentSize;
+            }
+
+            return SegmentSize <= TBindingProfile::MaximumPathSegmentBytes;
+        }
 
         /// Converts an EDP relative path to Arduino FS's rooted path form.
         [[nodiscard]] static bool MakeNativePath(
             FilePathView Path,
             char (&Buffer)[256U]
         ) noexcept {
-            if (Path.Size() > 254U) {
+            if (!IsPathRepresentable(Path)) {
                 return false;
             }
 
