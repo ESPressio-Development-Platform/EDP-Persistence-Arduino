@@ -112,17 +112,32 @@ def main():
             # that are not themselves named "include" (for example soc headers).
             # Derive an include root from every header path whose suffix starts
             # with a known public namespace directory.
-            # The packaged IDF tree contains public component headers both
-            # below named include directories and directly below component
-            # directories. For a compile-only contract probe, add each header's
-            # containing directory. This deliberately avoids reconstructing the
-            # full PlatformIO/SCons component graph and does not affect product
-            # code or linking.
-            includes.extend(
-                header.parent
-                for header in framework_libs.rglob("*.h")
-                if header.parent.is_dir()
+            # Add only canonical component roots plus the handful of
+            # generated/target-specific header directories that are not rooted
+            # beneath an "include" directory. Avoid one -I per header directory:
+            # macOS has a finite argv size and the IDF header corpus exceeds it.
+            required_headers = (
+                "freertos/FreeRTOS.h",
+                "FreeRTOSConfig.h",
+                "portmacro.h",
+                "sdkconfig.h",
+                "soc/reg_base.h",
+                "esp_newlib.h",
             )
+            for required_header in required_headers:
+                matches = list(framework_libs.rglob(required_header))
+                if not matches:
+                    print(f"ERROR: {required_header} was not found in the installed Arduino-ESP32 libraries package.", file=sys.stderr)
+                    return 2
+                for header in matches:
+                    if "/" in required_header:
+                        suffix_parts = Path(required_header).parts
+                        root = header
+                        for _ in suffix_parts:
+                            root = root.parent
+                        includes.append(root)
+                    else:
+                        includes.append(header.parent)
             portmacro_headers = list(framework_libs.rglob("portmacro.h"))
             if not portmacro_headers:
                 print("ERROR: portmacro.h was not found in the installed Arduino-ESP32 libraries package.", file=sys.stderr)
