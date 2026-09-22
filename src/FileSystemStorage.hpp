@@ -12,6 +12,25 @@ namespace ESPressio::Persistence::Arduino {
     namespace Framework = ESPressio::System::CompositionFramework;
 
 
+    namespace Detail {
+
+        /// Returns the binding's explicit invocation-concurrency guarantee when present.
+        ///
+        /// Older/custom profiles which predate the concurrency field remain conservative.
+        template<class TBindingProfile>
+        [[nodiscard]] consteval InvocationConcurrency BindingConcurrency() noexcept {
+            if constexpr (requires {
+                TBindingProfile::Concurrency;
+            }) {
+                return TBindingProfile::Concurrency;
+            } else {
+                return InvocationConcurrency::CallerSerialized;
+            }
+        }
+
+    } // namespace Detail
+
+
     /// Declares the compile-time guarantees of one hierarchical Arduino filesystem binding.
     ///
     /// @tparam TRetention Commit-boundary retention guaranteed by the bound filesystem.
@@ -20,13 +39,15 @@ namespace ESPressio::Persistence::Arduino {
     /// @tparam TMaximumPathBytes Largest complete EDP path accepted by the binding.
     /// @tparam TMaximumPathSegmentBytes Largest individual path segment accepted by the binding.
     /// @tparam TMaximumFileSize Largest logical file supported by the binding.
+    /// @tparam TInvocationConcurrency Safe invocation concurrency guaranteed by the mounted filesystem.
     template<
         RetentionLevel TRetention,
         TextCaseSensitivity TCaseSensitivity,
         MediaRemovability TRemovability,
         std::size_t TMaximumPathBytes,
         std::size_t TMaximumPathSegmentBytes,
-        std::uint64_t TMaximumFileSize
+        std::uint64_t TMaximumFileSize,
+        InvocationConcurrency TInvocationConcurrency = InvocationConcurrency::CallerSerialized
     >
     struct FileSystemBindingProfile final {
 
@@ -47,6 +68,16 @@ namespace ESPressio::Persistence::Arduino {
 
         /// Maximum logical file size supported by the binding.
         static constexpr StorageSize MaximumFileSize{TMaximumFileSize};
+
+        /// Safe invocation concurrency guaranteed by the mounted filesystem substrate.
+        static constexpr InvocationConcurrency Concurrency = TInvocationConcurrency;
+
+
+        static_assert(
+            TInvocationConcurrency >= InvocationConcurrency::CallerSerialized &&
+            TInvocationConcurrency <= InvocationConcurrency::ConcurrentOperations,
+            "Arduino FileSystemBindingProfile concurrency must be a valid InvocationConcurrency value"
+        );
 
     };
 
@@ -80,7 +111,10 @@ namespace ESPressio::Persistence::Arduino {
                 Framework::PropertyValue<AppendSupport, Support::Supported>,
                 Framework::PropertyValue<WriteFileAtSupport, Support::Supported>,
                 Framework::PropertyValue<FileCapacityReportingSupport, Support::Unsupported>,
-                Framework::PropertyValue<FileInvocationConcurrency, InvocationConcurrency::CallerSerialized>,
+                Framework::PropertyValue<
+                    FileInvocationConcurrency,
+                    Detail::BindingConcurrency<TBindingProfile>()
+                >,
                 Framework::PropertyValue<FileFailurePreservation, FailurePreservation::MayModify>,
                 Framework::PropertyValue<FileInterruptionAtomicity, InterruptionAtomicity::None>,
                 Framework::PropertyValue<DirectoryMutationFailurePreservation, FailurePreservation::MayModify>,
