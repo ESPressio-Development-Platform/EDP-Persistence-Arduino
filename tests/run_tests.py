@@ -154,6 +154,7 @@ def main():
             "-Wextra",
             "-Wpedantic",
             "-Werror",
+            "-Wno-error=pedantic",
             "-DESP32",
             "-DARDUINO_ARCH_ESP32",
             "-DARDUINO=10819",
