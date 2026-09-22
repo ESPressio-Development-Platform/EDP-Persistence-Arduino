@@ -154,7 +154,10 @@ def main():
             "-Wextra",
             "-Wpedantic",
             "-Werror",
-            "-Wno-error=pedantic",
+            # Arduino-ESP32/ESP-IDF deliberately uses GCC extensions such as
+            # #include_next. Keep strict warnings for EDP code, but do not let
+            # pedantic diagnostics originating in the SDK fail this probe.
+            "-Wno-pedantic",
             "-DESP32",
             "-DARDUINO_ARCH_ESP32",
             "-DARDUINO=10819",
