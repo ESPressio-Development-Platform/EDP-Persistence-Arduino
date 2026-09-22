@@ -27,6 +27,7 @@ def first_existing(*paths):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler")
+    parser.add_argument("--host-compiler")
     parser.add_argument("--platformio-home")
     parser.add_argument("--persistence")
     parser.add_argument("--system")
@@ -48,6 +49,17 @@ def main():
         home / "packages" / "toolchain-xtensa-esp-elf" / "bin" / "xtensa-esp32-elf-g++",
         home / "packages" / "toolchain-xtensa-esp32" / "bin" / "xtensa-esp32-elf-g++",
     )
+    host_compiler_value = (
+        args.host_compiler
+        or shutil.which("c++")
+        or shutil.which("clang++")
+        or shutil.which("g++")
+    )
+    host_compiler = (
+        Path(host_compiler_value).expanduser().resolve()
+        if host_compiler_value
+        else None
+    )
 
     missing = []
     if not persistence: missing.append("sibling EDP-Persistence checkout")
@@ -55,6 +67,7 @@ def main():
     if not framework: missing.append("Arduino-ESP32 framework package under ~/.platformio/packages")
     if not framework_libs: missing.append("Arduino-ESP32 ESP-IDF libraries package under ~/.platformio/packages")
     if not compiler: missing.append("Xtensa ESP32 C++ compiler under ~/.platformio/packages")
+    if not host_compiler: missing.append("host C++ compiler (c++, clang++, or g++)")
     if missing:
         print("ERROR: missing required compile dependency:", file=sys.stderr)
         for item in missing:
@@ -63,6 +76,58 @@ def main():
 
     build = Path(tempfile.mkdtemp(prefix="edp-persistence-arduino-tests-"))
     try:
+        behavior_source = root / "tests" / "ProviderBehaviorTests.cpp"
+        behavior_executable = build / "ProviderBehaviorTests"
+        behavior_command = [
+            str(host_compiler),
+            "-std=c++20",
+            "-Wall",
+            "-Wextra",
+            "-Wpedantic",
+            "-Werror",
+            "-I",
+            str(root / "tests" / "support" / "arduino"),
+            "-I",
+            str(root / "src"),
+            "-I",
+            str(persistence / "src"),
+            "-I",
+            str(system / "src"),
+            str(behavior_source),
+            "-o",
+            str(behavior_executable),
+        ]
+
+        print(f"Host compiler: {host_compiler}")
+        print("\n[1/2] Compiling and running concrete provider behavior tests...")
+
+        if args.verbose:
+            print(" ".join(str(value) for value in behavior_command))
+
+        result = subprocess.run(
+            behavior_command,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            print(
+                "\nFAIL: Arduino concrete provider behavior tests did not compile.",
+                file=sys.stderr,
+            )
+            return result.returncode
+
+        result = subprocess.run(
+            [str(behavior_executable)],
+            check=False,
+        )
+
+        if result.returncode != 0:
+            print(
+                "\nFAIL: Arduino concrete provider behavior tests failed.",
+                file=sys.stderr,
+            )
+            return result.returncode
+
         source = root / "tests" / "ContractCompile.cpp"
         object_file = build / "ContractCompile.o"
         includes = [
@@ -176,7 +241,7 @@ def main():
         print(f"EDP-Persistence: {persistence}")
         print(f"EDP-System: {system}")
         print(f"Build directory: {build}")
-        print("\n[1/1] Compiling Arduino concrete contract directly...")
+        print("\n[2/2] Compiling Arduino concrete contract directly...")
 
         if args.verbose:
             print(" ".join(command))
@@ -186,7 +251,10 @@ def main():
             print("\nFAIL: Arduino concrete contract did not compile.", file=sys.stderr)
             return result.returncode
 
-        print("\nPASS: Arduino concrete Persistence providers compiled and satisfied the abstract contract.")
+        print(
+            "\nPASS: Arduino concrete provider behavior tests passed and "
+            "the providers compiled against the real SDK contract."
+        )
         return 0
     finally:
         if args.keep_build:
