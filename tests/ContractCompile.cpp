@@ -1,8 +1,13 @@
+#include <memory/ByteOperationsProvider.hpp>
+
 #include <ESPressio_Persistence_Arduino.hpp>
 
 namespace {
 
     struct ContractBinding final {};
+
+    using ContractByteOperationsProvider =
+        ESPressio::Platform::Portable::Memory::ByteOperationsProvider;
 
     using ContractFileSystemProfile =
         ESPressio::Persistence::Arduino::FileSystemBindingProfile<
@@ -17,10 +22,17 @@ namespace {
 
     static_assert([]() consteval {
         ESPressio::Persistence::ValidatePersistenceProvider<
-            ESPressio::Persistence::Arduino::FileSystemStorage<ContractBinding, ContractFileSystemProfile>
+            ESPressio::Persistence::Arduino::FileSystemStorage<
+                ContractBinding,
+                ContractFileSystemProfile,
+                ContractByteOperationsProvider
+            >
         >();
         ESPressio::Persistence::ValidatePersistenceProvider<
-            ESPressio::Persistence::Arduino::PreferencesKeyValueStorage<ContractBinding>
+            ESPressio::Persistence::Arduino::PreferencesKeyValueStorage<
+                ContractBinding,
+                ContractByteOperationsProvider
+            >
         >();
         return true;
     }());
