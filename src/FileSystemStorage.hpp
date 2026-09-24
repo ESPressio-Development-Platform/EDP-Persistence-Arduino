@@ -5,7 +5,7 @@
 #include <FS.h>
 
 #include <ESPressio_Persistence.hpp>
-#include <memory/ByteOperationsContract.hpp>
+#include <ESPressio_Memory.hpp>
 
 namespace ESPressio::Persistence::Arduino {
 

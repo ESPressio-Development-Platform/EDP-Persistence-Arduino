@@ -32,6 +32,8 @@ This repository is the explicit Arduino concrete sibling of the SDK-neutral `EDP
 
 A consuming application may replace EDP-Platform-Portable with any provider satisfying `EDP-Memory::ByteOperations`.
 
+Arduino IDE / Arduino CLI dependency discovery enters EDP-Memory through its public `<ESPressio_Memory.hpp>` umbrella. The concrete provider headers do not reach directly into EDP-Memory's internal `src/memory/...` paths, preserving the same mandatory dependency while allowing Arduino to discover the sibling library correctly.
+
 See [DEPENDENCY_GRAPH.MD](./DEPENDENCY_GRAPH.MD) for the maintained dependency graph.
 
 ## Filesystem binding profile

@@ -1,5 +1,8 @@
 # EDP-Persistence-Arduino Dependency Graph
 
+> Revalidated: 2026-09-24 — Arduino dependency-discovery correction changes only the public include entry point for the existing mandatory EDP-Memory dependency; no dependency edge changed.
+
+
 ## Library Dependency Tree
 
 ```text
