@@ -15,3 +15,7 @@ This Wiki is maintained beside the code on `main`. Source code and repository `d
 Mandatory: EDP-Persistence and EDP-Memory.
 
 Use [Architecture](Architecture.md), [Public API](Public-API.md), [Internal API](Internal-API.md), [Implementation](Implementation.md), [Composition](Composition.md), [Resources / Lifecycle / Concurrency](Resources-Lifecycle-Concurrency.md), and [Build / Test / Source](Build-Test-Source.md).
+
+## Arduino packaging
+
+The repository carries `library.properties` and exports `ESPressio_Persistence_Arduino.hpp` as its root Arduino include, allowing the documented Arduino IDE surface to be discovered without manual compiler include paths.

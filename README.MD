@@ -36,6 +36,13 @@ Arduino IDE / Arduino CLI dependency discovery enters EDP-Memory through its pub
 
 See [DEPENDENCY_GRAPH.MD](./DEPENDENCY_GRAPH.MD) for the maintained dependency graph.
 
+## Arduino library packaging
+
+The repository includes standard Arduino `library.properties` metadata and exports `<ESPressio_Persistence_Arduino.hpp>` as its root include. Arduino IDE / Arduino CLI can therefore discover the concrete provider library normally when it is installed or supplied as a local library root.
+
+The supplied Arduino demo selects the optional portable ByteOperations concrete through `<ESPressio_Platform_Portable_ByteOperations.hpp>`, the narrow root-level public entry point that avoids importing unrelated portable providers.
+
+
 ## Filesystem binding profile
 
 A filesystem binding profile is a compile-time assertion about the specific mounted filesystem, not about Arduino `fs::FS` in general.

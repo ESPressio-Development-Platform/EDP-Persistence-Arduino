@@ -52,6 +52,10 @@ with the same maintained PIOArduino platform package and C++20 flags.
 
 ## Arduino IDE
 
+EDP-Persistence-Arduino now includes standard Arduino `library.properties` metadata and exports `<ESPressio_Persistence_Arduino.hpp>` as its root public include. Install/supply EDP-Persistence-Arduino, EDP-Persistence, EDP-Memory and EDP-System as normal Arduino libraries rather than adding their `src` directories manually.
+
+The supplied demo uses `<ESPressio_Platform_Portable_ByteOperations.hpp>` to select only the portable ByteOperations concrete without importing unrelated Platform-Portable providers.
+
 Arduino IDE consumers must use an Arduino-ESP32 core/toolchain release with C++20 support and install the required EDP libraries:
 
 - EDP-Persistence-Arduino;
