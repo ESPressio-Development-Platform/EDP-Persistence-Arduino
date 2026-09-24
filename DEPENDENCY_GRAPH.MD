@@ -1,5 +1,11 @@
 # EDP-Persistence-Arduino Dependency Graph
 
+> Revalidated: 2026-09-24 — Arduino library metadata and the narrow ByteOperations demo entry point change packaging/discovery only; production dependency edges remain unchanged.
+
+
+> Revalidated: 2026-09-24 — Arduino dependency-discovery correction changes only the public include entry point for the existing mandatory EDP-Memory dependency; no dependency edge changed.
+
+
 ## Library Dependency Tree
 
 ```text

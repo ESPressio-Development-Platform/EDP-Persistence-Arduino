@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SD.h>
 
-#include <memory/ByteOperationsProvider.hpp>
+#include <ESPressio_Platform_Portable_ByteOperations.hpp>
 
 #include <ESPressio_Persistence_Arduino.hpp>
 

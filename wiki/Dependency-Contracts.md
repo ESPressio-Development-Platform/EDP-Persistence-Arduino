@@ -15,6 +15,8 @@ The provider properties advertised by each concrete type are part of its compile
 
 Both concrete providers declare exactly one external `Memory::ByteOperations` Requirement and validate the supplied provider through `Memory::Detail::ByteOperationsProviderTraits`.
 
+The provider headers enter EDP-Memory through the public `<ESPressio_Memory.hpp>` umbrella so Arduino IDE / Arduino CLI can discover the mandatory sibling library before Memory contracts are referenced.
+
 ByteOperations is used for bounded copy/scratch handling; the Persistence providers do not create a second memory abstraction.
 
 ## FileSystemStorage property contract

@@ -2,16 +2,16 @@
 
 **Primary classification:** PUBLIC PROVIDER / EXTENSION API
 
-**Source baseline:** `cb27418d5b6a6fa84acc72735d9284e660110ec1`
+**Source baseline:** `f3fce6a6882862e6eba447a02d21e1fdb1c80d36`
 
-[Open exact source](https://github.com/ESPressio-Development-Platform/EDP-Persistence-Arduino/blob/cb27418d5b6a6fa84acc72735d9284e660110ec1/src/FileSystemStorage.hpp)
+[Open exact source](https://github.com/ESPressio-Development-Platform/EDP-Persistence-Arduino/blob/f3fce6a6882862e6eba447a02d21e1fdb1c80d36/src/FileSystemStorage.hpp)
 
 ## Direct includes
 
+- `ESPressio_Memory.hpp`
 - `cstring`
 - `FS.h`
 - `ESPressio_Persistence.hpp`
-- `memory/ByteOperationsContract.hpp`
 
 ## Documented declarations
 

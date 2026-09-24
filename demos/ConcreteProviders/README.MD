@@ -22,7 +22,8 @@ Install or provide:
 
 ## Targets
 
-- `Arduino_IDE` — open `ConcreteProviders.ino` after installing the dependencies above.
+- `Arduino_IDE` — open `Arduino_IDE.ino` after installing the dependencies above.
+  The sketch uses the root-level `ESPressio_Platform_Portable_ByteOperations.hpp` entry point so Arduino can discover the optional provider library without importing unrelated portable providers.
 - `PlatformIO_Arduino` — uses the maintained PIOArduino platform package and C++20.
 - `PlatformIO_ESP-IDF` — uses Arduino as an ESP-IDF component through the maintained PIOArduino platform package and C++20.
 
